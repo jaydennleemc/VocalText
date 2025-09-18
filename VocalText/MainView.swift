@@ -45,169 +45,157 @@ struct MainView: View {
     }
     @State private var hasMicrophonePermission = false
     @State private var modelDownloaded = false
-    @State private var isRealTimeMode = false // 实时转录模式
     
     var body: some View {
-        VStack {
-            HStack {
-                // 实时转录切换按钮
-                Button(action: {
-                    isRealTimeMode.toggle()
-                    audioTranscriber.enableRealTimeTranscription(isRealTimeMode)
-                }) {
-                    HStack {
-                        Image(systemName: isRealTimeMode ? "waveform.circle.fill" : "waveform.circle")
-                        Text(isRealTimeMode ? "实时转录" : "实时转录")
+        ZStack {
+            // 主页面内容
+            VStack {
+                HStack {
+                    Spacer()
+                    
+                    Button(action: {
+                        // 显示设置界面
+                        showSettingsView = true
+                    }) {
+                        Image(systemName: "gear")
+                            .foregroundColor(.gray)
                     }
-                    .foregroundColor(isRealTimeMode ? .blue : .gray)
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.top, 12)
+                    .padding(.trailing, 16)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .padding(8)
+                .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏设置按钮
                 
                 Spacer()
                 
-                Button(action: {
-                    // 显示设置界面
-                    showSettingsView = true
-                }) {
-                    Image(systemName: "gear")
-                        .foregroundColor(.gray)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding(8)
-                .sheet(isPresented: $showSettingsView) {
-                    SettingsView(
-                        isPresented: $showSettingsView
-                    )
-                    .environmentObject(audioTranscriber)
-                    .onDisappear {
-                        // 當設置視圖關閉時，重新檢查模型下載狀態
-                        checkModelDownloaded()
+                // 显示下载进度或转录文本
+                if audioTranscriber.isDownloading {
+                    VStack {
+                        Text(audioTranscriber.downloadStatus)
+                        ProgressView(value: audioTranscriber.downloadProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .padding()
                     }
-                }
-            }
-            
-            // 显示当前选择的模型和输入音源
-            HStack {
-                Text("模型: \(selectedModel)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                if audioTranscriber.audioDevices.count > audioTranscriber.selectedDeviceIndex {
-                    Text("音源: \(audioTranscriber.audioDevices[audioTranscriber.selectedDeviceIndex].name)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal)
-            
-            Spacer()
-            
-            // 显示下载进度或转录文本
-            if audioTranscriber.isDownloading {
-                VStack {
-                    Text(audioTranscriber.downloadStatus)
-                    ProgressView(value: audioTranscriber.downloadProgress)
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .padding()
-                }
-            } else {
-                Group {
-                    if isRecording {
-                        WaveAnimation()
-                    } else {
-                        Text(audioTranscriber.transcript)
-                            .onTapGesture {
-                                copyToClipboard(audioTranscriber.transcript)
-                            }
-                            .contextMenu {
-                                Button("复制到剪贴板") {
+                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏内容
+                } else {
+                    Group {
+                        if isRecording {
+                            WaveAnimation()
+                        } else {
+                            Text(audioTranscriber.transcript)
+                                .onTapGesture {
                                     copyToClipboard(audioTranscriber.transcript)
                                 }
-                            }
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            
-            Spacer()
-            
-            // 根据状态显示不同的按钮
-            if !hasMicrophonePermission {
-                // 请求麦克风权限按钮
-                Button(action: {
-                    requestMicrophonePermission()
-                }) {
-                    Text("获取麦克风权限")
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding()
-            } else if !modelDownloaded {
-                // 下载模型按钮
-                Button(action: {
-                    downloadDefaultModel()
-                }) {
-                    Text("下载默认模型")
-                        .padding()
-                        .background(Color.gray)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding()
-            } else {
-                // 录音按钮
-                HStack {
-                    Button(action: {
-                        isRecording.toggle()
-                        if isRecording {
-                            // 設置模型並開始錄音
-                            audioTranscriber.setModel(selectedModel)
-                            // 再次檢查模型是否已下載
-                            if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased()) {
-                                // 如果模型未下載，先下載模型
-                                Task {
-                                    let downloadSuccess = await audioTranscriber.checkAndDownloadModelIfNeeded()
-                                    if downloadSuccess {
-                                        DispatchQueue.main.async {
-                                            modelDownloaded = true
-                                            audioTranscriber.startRecording()
-                                        }
-                                    } else {
-                                        DispatchQueue.main.async {
-                                            self.isRecording = false
-                                            self.modelDownloaded = false
-                                            // 錯誤訊息會在 AudioTranscriber 中處理
-                                        }
+                                .contextMenu {
+                                    Button("复制到剪贴板") {
+                                        copyToClipboard(audioTranscriber.transcript)
                                     }
                                 }
-                            } else {
-                                // 确保modelDownloaded状态正确
-                                modelDownloaded = true
-                                audioTranscriber.startRecording()
-                            }
-                        } else {
-                            audioTranscriber.stopRecording()
                         }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏内容
+                }
+                
+                Spacer()
+                
+                // 根据状态显示不同的按钮
+                if !hasMicrophonePermission {
+                    // 请求麦克风权限按钮
+                    Button(action: {
+                        requestMicrophonePermission()
                     }) {
-                        HStack {
-                            Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                                .font(.title)
-                            Text(isRecording ? "停止录音" : "开始录音")
-                                .fontWeight(.semibold)
-                        }
-                        .padding()
-                        .background(isRecording ? Color.red : Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                        Text("获取麦克风权限")
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .padding()
+                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏按钮
+                } else if !modelDownloaded {
+                    // 下载模型按钮
+                    Button(action: {
+                        downloadDefaultModel()
+                    }) {
+                        Text("下载默认模型")
+                            .padding()
+                            .background(Color.gray)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding()
+                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏按钮
+                } else {
+                    // 录音按钮
+                    HStack {
+                        Button(action: {
+                            isRecording.toggle()
+                            if isRecording {
+                                // 設置模型並開始錄音
+                                audioTranscriber.setModel(selectedModel)
+                                // 设置语言
+                                if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+                                    audioTranscriber.setLanguage(savedLanguage)
+                                }
+                                // 再次檢查模型是否已下載
+                                if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased()) {
+                                    // 如果模型未下載，先下載模型
+                                    Task {
+                                        let downloadSuccess = await audioTranscriber.checkAndDownloadModelIfNeeded()
+                                        if downloadSuccess {
+                                            DispatchQueue.main.async {
+                                                modelDownloaded = true
+                                                audioTranscriber.startRecording()
+                                            }
+                                        } else {
+                                            DispatchQueue.main.async {
+                                                self.isRecording = false
+                                                self.modelDownloaded = false
+                                                // 錯誤訊息會在 AudioTranscriber 中處理
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // 确保modelDownloaded状态正确
+                                    modelDownloaded = true
+                                    audioTranscriber.startRecording()
+                                }
+                            } else {
+                                audioTranscriber.stopRecording()
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                                    .font(.title)
+                                Text(isRecording ? "停止录音" : "开始录音")
+                                    .fontWeight(.semibold)
+                            }
+                            .padding()
+                            .background(isRecording ? Color.red : Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding()
+                    }
+                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏按钮
+                }
+            }
+            .frame(width: 400, height: 300) // 增大窗口尺寸
+            
+            // 设置页面
+            if showSettingsView {
+                SettingsView(
+                    isPresented: $showSettingsView
+                )
+                .environmentObject(audioTranscriber)
+                .onDisappear {
+                    // 當設置視圖關閉時，重新檢查模型下載狀態
+                    checkModelDownloaded()
                 }
             }
         }
@@ -244,6 +232,11 @@ struct MainView: View {
                 let savedDeviceIndex = UserDefaults.standard.integer(forKey: "SelectedDeviceIndex")
                 if savedDeviceIndex < audioTranscriber.audioDevices.count {
                     audioTranscriber.setSelectedDevice(index: savedDeviceIndex)
+                }
+                
+                // 加载保存的语言设置
+                if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+                    audioTranscriber.setLanguage(savedLanguage)
                 }
             }
         }
@@ -298,6 +291,10 @@ struct MainView: View {
     // 下载默认模型
     private func downloadDefaultModel() {
         audioTranscriber.setModel(selectedModel)
+        // 设置语言
+        if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+            audioTranscriber.setLanguage(savedLanguage)
+        }
         Task {
             let success = await audioTranscriber.checkAndDownloadModelIfNeeded()
             DispatchQueue.main.async {

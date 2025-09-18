@@ -27,10 +27,19 @@ class MenuBarController: NSObject, NSMenuDelegate {
             button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)
             button.action = #selector(showPopover(_:))
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp]) // 监听左右键点击
         }
     }
     
     @objc private func showPopover(_ sender: AnyObject?) {
+        // 检查是左键还是右键点击
+        let event = NSApp.currentEvent!
+        if event.type == .rightMouseUp {
+            // 右键点击显示菜单
+            showContextMenu()
+            return
+        }
+        
         // 如果popover已经显示，则关闭它
         if popover.isShown {
             closePopover(sender)
@@ -55,6 +64,18 @@ class MenuBarController: NSObject, NSMenuDelegate {
         
         // 确保popover在应用程序激活时显示
         NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    private func showContextMenu() {
+        let menu = NSMenu()
+        
+        let quitItem = NSMenuItem(title: "退出", action: #selector(quitApp(_:)), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil // 重置菜单以恢复popover功能
     }
     
     private func closePopover(_ sender: AnyObject?) {

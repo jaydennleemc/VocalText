@@ -15,11 +15,10 @@ class AudioTranscriber: NSObject, ObservableObject {
     private var audioEngine: AVAudioEngine?
     private var audioFile: AVAudioFile?
     private var whisperKit: WhisperKit?
-    private var currentModel: String = "tiny" // 默认模型
+    private var currentModel: String = "small" // 默认模型
     private var modelDownloaded: Bool = false // 标记模型是否已下载
     private var audioData: Data = Data() // 用于存储录音数据
     private var audioFormat: AVAudioFormat? // 存储音频格式信息
-    private var isRealTimeTranscription = false // 标记是否启用实时转录
     private var selectedDeviceID: AudioDeviceID? // 存储选择的音频设备ID
     
     @Published var isRecording = false
@@ -45,10 +44,6 @@ class AudioTranscriber: NSObject, ObservableObject {
     func setModel(_ model: String) {
         currentModel = model.lowercased()
         print("模型已设置为: \(currentModel)")
-    }
-    
-    func enableRealTimeTranscription(_ enable: Bool) {
-        isRealTimeTranscription = enable
     }
     
     func isModelAlreadyDownloaded(model: String) -> Bool {
@@ -186,11 +181,28 @@ class AudioTranscriber: NSObject, ObservableObject {
         }
     }
     
+    private var selectedLanguage: String = "zh" // 默认语言为中文
+    
+    func setLanguage(_ language: String) {
+        selectedLanguage = language
+        print("语言已设置为: \(selectedLanguage)")
+        
+        // 添加调试信息，查看 WhisperKit 是否支持语言设置
+        if let whisperKit = whisperKit {
+            // 尝试查看 whisperKit 是否有语言相关的属性或方法
+            print("WhisperKit 实例: \(whisperKit)")
+        }
+    }
+    
     private func initializeWhisperKitAndStartRecording() async {
         // 初始化WhisperKit
         do {
             // 根据选择的模型初始化WhisperKit
-            let config = WhisperKitConfig(model: currentModel)
+            // 尝试在配置中设置语言（如果 WhisperKit 支持）
+            var config = WhisperKitConfig(model: currentModel)
+            
+            // 注意：WhisperKitConfig 可能不直接支持 language 参数
+            // 我们需要在转录时指定语言
             whisperKit = try await WhisperKit(config)
             print("WhisperKit 初始化成功，使用模型: \(currentModel)")
             
@@ -267,13 +279,6 @@ class AudioTranscriber: NSObject, ObservableObject {
                 DispatchQueue.main.async {
                     print("音频数据大小: \(audioData.count) 字节")
                     self.audioData.append(audioData)
-                    
-                    // 如果启用了实时转录并且有足够的数据，进行实时转录
-                    if self.isRealTimeTranscription && self.audioData.count > Int(inputFormat.sampleRate) * 2 * 2 { // 至少2秒的数据
-                        Task {
-                            await self.performRealTimeTranscription()
-                        }
-                    }
                 }
             } else {
                 DispatchQueue.main.async {
@@ -348,41 +353,6 @@ class AudioTranscriber: NSObject, ObservableObject {
             processAudio()
         } else {
             transcript = "没有录制到音频数据"
-        }
-    }
-    
-    // 实时转录方法
-    private func performRealTimeTranscription() async {
-        guard let whisperKit = whisperKit, isRecording else { return }
-        
-        // 创建临时文件进行转录
-        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("realtime.wav")
-        
-        do {
-            try saveAudioDataToWAV(audioData, format: audioFormat, url: tempURL)
-            
-            // 使用WhisperKit进行转录
-            let result = try await whisperKit.transcribe(audioPath: tempURL.path)
-            
-            await MainActor.run {
-                if let results = result as? [TranscriptionResult], let firstResult = results.first {
-                    // 更新转录文本
-                    self.transcript = firstResult.text ?? "转录结果为空"
-                } else if let text = result as? String {
-                    // 如果结果直接是字符串
-                    self.transcript = text.isEmpty ? "转录结果为空" : text
-                } else {
-                    // 尝试获取text属性
-                    let text = (result as? NSObject)?.value(forKey: "text") as? String ?? "转录结果为空"
-                    self.transcript = text
-                }
-                print("实时转录结果: \(self.transcript)")
-            }
-            
-            // 清理临时文件
-            try? FileManager.default.removeItem(at: tempURL)
-        } catch {
-            print("实时转录失败: \(error)")
         }
     }
     
@@ -620,11 +590,26 @@ class AudioTranscriber: NSObject, ObservableObject {
         
         do {
             print("开始转录音频文件: \(audioFilePath)")
-            let result = try await whisperKit.transcribe(audioPath: audioFilePath)
+            
+            // 使用 DecodingOptions 配置语言
+            let decodingOptions = DecodingOptions(
+                language: selectedLanguage, // 使用设置的语言代码
+                temperature: 0.0,
+                sampleLength: 224
+            )
+            
+            print("使用语言: \(selectedLanguage)")
+            
+            // 调用 transcribe 方法并传入解码选项
+            let result = try await whisperKit.transcribe(
+                audioPath: audioFilePath,
+                decodeOptions: decodingOptions
+            )
+            
             print("转录完成")
             
             await MainActor.run {
-                // 处理转录结果，确保正确提取文本
+                // 处理转录结果
                 var extractedText = "转录结果为空"
                 
                 if let results = result as? [TranscriptionResult] {
