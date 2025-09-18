@@ -9,6 +9,30 @@ import SwiftUI
 import AppKit
 import AVFoundation
 
+struct WaveAnimation: View {
+    @State private var waveOffset = 0.0
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<5) { i in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.blue)
+                    .frame(width: 4, height: 20 + CGFloat(sin(waveOffset + Double(i)) * 10))
+                    .animation(
+                        Animation.easeInOut(duration: 0.5)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.1),
+                        value: waveOffset
+                    )
+            }
+        }
+        .onAppear {
+            waveOffset = .pi
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 struct MainView: View {
     @StateObject private var audioTranscriber = AudioTranscriber()
     @State private var isRecording = false
@@ -53,11 +77,7 @@ struct MainView: View {
                 .padding(8)
                 .sheet(isPresented: $showSettingsView) {
                     SettingsView(
-                        isPresented: $showSettingsView,
-                        audioDevices: audioTranscriber.audioDevices,
-                        onDeviceSelected: { index in
-                            audioTranscriber.setSelectedDevice(index: index)
-                        }
+                        isPresented: $showSettingsView
                     )
                     .environmentObject(audioTranscriber)
                     .onDisappear {
@@ -66,6 +86,20 @@ struct MainView: View {
                     }
                 }
             }
+            
+            // 显示当前选择的模型和输入音源
+            HStack {
+                Text("模型: \(selectedModel)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if audioTranscriber.audioDevices.count > audioTranscriber.selectedDeviceIndex {
+                    Text("音源: \(audioTranscriber.audioDevices[audioTranscriber.selectedDeviceIndex].name)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal)
             
             Spacer()
             
@@ -78,9 +112,23 @@ struct MainView: View {
                         .padding()
                 }
             } else {
-                Text(audioTranscriber.transcript)
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Group {
+                    if isRecording {
+                        WaveAnimation()
+                    } else {
+                        Text(audioTranscriber.transcript)
+                            .onTapGesture {
+                                copyToClipboard(audioTranscriber.transcript)
+                            }
+                            .contextMenu {
+                                Button("复制到剪贴板") {
+                                    copyToClipboard(audioTranscriber.transcript)
+                                }
+                            }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             
             Spacer()
@@ -139,6 +187,8 @@ struct MainView: View {
                                     }
                                 }
                             } else {
+                                // 确保modelDownloaded状态正确
+                                modelDownloaded = true
                                 audioTranscriber.startRecording()
                             }
                         } else {
@@ -234,8 +284,15 @@ struct MainView: View {
     // 检查模型是否已下载
     private func checkModelDownloaded() {
         // 检查当前选择的模型是否已下载
-        modelDownloaded = audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased())
-        print("检查模型下载状态: \(modelDownloaded) for model: \(selectedModel.lowercased())")
+        let isDownloaded = audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased())
+        modelDownloaded = isDownloaded
+        print("检查模型下载状态: \(isDownloaded) for model: \(selectedModel.lowercased())")
+    }
+    
+    // 更新设备显示信息
+    private func updateDeviceDisplay() {
+        // 这个方法将在视图中自动更新设备显示
+        // 因为我们使用了@Published属性
     }
     
     // 下载默认模型
@@ -251,6 +308,19 @@ struct MainView: View {
                 }
             }
         }
+    }
+    
+    // 复制文本到剪贴板
+    private func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        
+        // 显示一个简短的通知，告知用户文本已复制
+        let notification = NSUserNotification()
+        notification.title = "已复制"
+        notification.informativeText = "文本已复制到剪贴板"
+        NSUserNotificationCenter.default.deliver(notification)
     }
 }
 

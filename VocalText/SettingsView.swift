@@ -14,20 +14,16 @@ struct SettingsView: View {
     @State private var selectedDeviceIndex = 0
     
     let models = ["tiny", "base", "small", "medium", "large-v3"]
-    var audioDevices: [AudioTranscriber.AudioDevice] = []
-    var onDeviceSelected: ((Int) -> Void)? = nil
     
-    init(isPresented: Binding<Bool>, audioDevices: [AudioTranscriber.AudioDevice] = [], onDeviceSelected: ((Int) -> Void)? = nil) {
+    init(isPresented: Binding<Bool>) {
         self._isPresented = isPresented
-        self.audioDevices = audioDevices
-        self.onDeviceSelected = onDeviceSelected
         
-        // 從 UserDefaults 加載保存的設置
+        // 从 UserDefaults 加载保存的设置
         if let savedModel = UserDefaults.standard.string(forKey: "SelectedModel") {
             self._selectedModel = State(initialValue: savedModel)
         }
         
-        // 從 UserDefaults 加載保存的設備索引
+        // 从 UserDefaults 加载保存的设备索引
         self._selectedDeviceIndex = State(initialValue: UserDefaults.standard.integer(forKey: "SelectedDeviceIndex"))
     }
     
@@ -83,15 +79,12 @@ struct SettingsView: View {
                     .fontWeight(.semibold)
                 
                 Picker("选择设备", selection: $selectedDeviceIndex) {
-                    ForEach(0..<audioDevices.count, id: \.self) { index in
-                        Text(audioDevices[index].name).tag(index)
+                    ForEach(0..<audioTranscriber.audioDevices.count, id: \.self) { index in
+                        Text(audioTranscriber.audioDevices[index].name).tag(index)
                     }
                 }
                 .pickerStyle(MenuPickerStyle())
                 .frame(width: 300) // 设置设备选择器的宽度
-                .onChange(of: selectedDeviceIndex) { newValue in
-                    onDeviceSelected?(newValue)
-                }
             }
             .padding(.horizontal, 10)
             
@@ -111,8 +104,13 @@ struct SettingsView: View {
                     UserDefaults.standard.set(selectedModel, forKey: "SelectedModel")
                     UserDefaults.standard.set(selectedDeviceIndex, forKey: "SelectedDeviceIndex")
                     
-                    // 通知主視圖模型已更改
+                    // 通知AudioTranscriber设置选择的设备
+                    audioTranscriber.setSelectedDevice(index: selectedDeviceIndex)
+                    
+                    // 通知主视图模型已更改
                     NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
+                    
+                    print("设置已保存 - 模型: \(selectedModel), 设备索引: \(selectedDeviceIndex)")
                     
                     isPresented = false
                 }

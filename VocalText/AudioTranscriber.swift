@@ -60,21 +60,18 @@ class AudioTranscriber: NSObject, ObservableObject {
         
         // 检查模型目录中是否包含必要的文件
         if exists {
-            let requiredFiles = ["AudioEncoder.mlmodelc", "MelSpectrogram.mlmodelc", "TextDecoder.mlmodelc"]
+            let requiredFiles = ["AudioEncoder.mlmodelc", "MelSpectrogram.mlmodelc", "TextDecoder.mlmodelc", "Config.json"]
             for file in requiredFiles {
                 let filePath = "\(modelPath)/\(file)"
                 if !fileManager.fileExists(atPath: filePath) {
                     print("模型 \(model) 缺少必要文件: \(file)")
-                    modelDownloaded = false
                     return false
                 }
             }
             print("模型 \(model) 已完整下载")
-            modelDownloaded = true
             return true
         }
         
-        modelDownloaded = false
         return false
     }
     
@@ -167,7 +164,20 @@ class AudioTranscriber: NSObject, ObservableObject {
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             DispatchQueue.main.async {
                 if granted {
-                    self?.startRecordingWithPermission()
+                    // 先检查模型是否已下载
+                    guard let self = self else { return }
+                    
+                    // 检查模型是否已下载（重新检查以确保状态正确）
+                    if !self.isModelAlreadyDownloaded() {
+                        self.transcript = "模型未下载，请先下载模型"
+                        self.isRecording = false
+                        return
+                    }
+                    
+                    // 初始化WhisperKit然后开始录音
+                    Task {
+                        await self.initializeWhisperKitAndStartRecording()
+                    }
                 } else {
                     self?.transcript = "麦克风权限被拒绝"
                     self?.isRecording = false
@@ -176,116 +186,115 @@ class AudioTranscriber: NSObject, ObservableObject {
         }
     }
     
-    private func startRecordingWithPermission() {
+    private func initializeWhisperKitAndStartRecording() async {
         // 初始化WhisperKit
-        Task {
-            // 检查模型是否已下载
-            if !modelDownloaded {
-                await MainActor.run {
-                    self.transcript = "请先下载模型"
-                    self.isRecording = false
-                }
-                return
+        do {
+            // 根据选择的模型初始化WhisperKit
+            let config = WhisperKitConfig(model: currentModel)
+            whisperKit = try await WhisperKit(config)
+            print("WhisperKit 初始化成功，使用模型: \(currentModel)")
+            
+            // 初始化完成后开始录音
+            await MainActor.run {
+                self.startAudioEngine()
+            }
+        } catch {
+            print("WhisperKit 初始化失败: \(error)")
+            await MainActor.run {
+                self.transcript = "模型加载失败: \(error.localizedDescription)"
+                self.isRecording = false
+            }
+        }
+    }
+    
+    private func startAudioEngine() {
+        // 设置音频引擎
+        audioEngine = AVAudioEngine()
+        
+        guard let audioEngine = audioEngine else { 
+            transcript = "音频引擎初始化失败"
+            isRecording = false
+            return
+        }
+        
+        // 获取输入节点
+        let inputNode: AVAudioInputNode
+        if let deviceID = selectedDeviceID {
+            // 如果选择了特定设备，尝试使用它
+            // 注意：AVAudioEngine 不直接支持选择特定的输入设备
+            // 我们需要通过 AVAudioSession (在 iOS 中) 或 CoreAudio (在 macOS 中) 来实现
+            // 这里我们仍然使用默认输入节点，但会在日志中记录选择的设备
+            print("尝试使用音频设备: \(deviceID)")
+            inputNode = audioEngine.inputNode
+        } else {
+            // 使用默认输入节点
+            inputNode = audioEngine.inputNode
+        }
+        
+        let bus = 0
+        
+        // 使用输入节点的输出格式，避免格式不匹配
+        let inputFormat = inputNode.outputFormat(forBus: bus)
+        audioFormat = inputFormat // 保存音频格式
+        
+        print("音频格式: \(inputFormat)")
+        print("采样率: \(inputFormat.sampleRate)")
+        print("声道数: \(inputFormat.channelCount)")
+        print("位深度: \(inputFormat.settings[AVLinearPCMBitDepthKey] ?? "Unknown")")
+        
+        // 重置音频数据
+        audioData = Data()
+        
+        // 创建一个与输入格式匹配的格式用于安装tap
+        let tapFormat = inputFormat
+        
+        // 安装抽头以捕获音频数据
+        inputNode.installTap(onBus: bus, bufferSize: 1024, format: tapFormat) { [weak self] buffer, time in
+            guard let self = self else { return }
+            
+            // 将音频数据转换为Data并追加
+            let channelCount = Int(buffer.format.channelCount)
+            let frameLength = Int(buffer.frameLength)
+            
+            // 打印调试信息
+            DispatchQueue.main.async {
+                print("接收到音频数据: \(buffer.frameLength) 帧")
+                print("缓冲区大小: \(buffer.frameCapacity)")
             }
             
-            do {
-                // 根据选择的模型初始化WhisperKit
-                let config = WhisperKitConfig(model: currentModel)
-                whisperKit = try await WhisperKit(config)
-                print("WhisperKit 初始化成功，使用模型: \(currentModel)")
-            } catch {
-                print("WhisperKit 初始化失败: \(error)")
-                await MainActor.run {
-                    self.transcript = "模型加载失败: \(error.localizedDescription)"
-                    self.isRecording = false
-                }
-                return
-            }
-            
-            // 设置音频引擎
-            audioEngine = AVAudioEngine()
-            
-            guard let audioEngine = audioEngine else { return }
-            
-            // 获取输入节点
-            let inputNode: AVAudioInputNode
-            if let deviceID = selectedDeviceID {
-                // 如果选择了特定设备，尝试使用它
-                // 注意：AVAudioEngine 不直接支持选择特定的输入设备
-                // 我们需要通过 AVAudioSession (在 iOS 中) 或 CoreAudio (在 macOS 中) 来实现
-                // 这里我们仍然使用默认输入节点，但会在日志中记录选择的设备
-                print("尝试使用音频设备: \(deviceID)")
-                inputNode = audioEngine.inputNode
-            } else {
-                // 使用默认输入节点
-                inputNode = audioEngine.inputNode
-            }
-            
-            let bus = 0
-            
-            // 使用输入节点的输出格式，避免格式不匹配
-            let inputFormat = inputNode.outputFormat(forBus: bus)
-            audioFormat = inputFormat // 保存音频格式
-            
-            print("音频格式: \(inputFormat)")
-            print("采样率: \(inputFormat.sampleRate)")
-            print("声道数: \(inputFormat.channelCount)")
-            print("位深度: \(inputFormat.settings[AVLinearPCMBitDepthKey] ?? "Unknown")")
-            
-            // 重置音频数据
-            audioData = Data()
-            
-            // 创建一个与输入格式匹配的格式用于安装tap
-            let tapFormat = AVAudioFormat(commonFormat: inputFormat.commonFormat, 
-                                          sampleRate: inputFormat.sampleRate, 
-                                          channels: inputFormat.channelCount, 
-                                          interleaved: inputFormat.isInterleaved)
-            
-            // 安装抽头以捕获音频数据
-            inputNode.installTap(onBus: bus, bufferSize: 1024, format: tapFormat) { [weak self] buffer, time in
-                guard let self = self else { return }
-                
-                // 将音频数据转换为Data并追加
-                let channelCount = Int(buffer.format.channelCount)
-                let frameLength = Int(buffer.frameLength)
-                
-                // 打印调试信息
+            // 获取音频数据
+            if let audioData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
                 DispatchQueue.main.async {
-                    print("接收到音频数据: \(buffer.frameLength) 帧")
-                    print("缓冲区大小: \(buffer.frameCapacity)")
-                }
-                
-                // 获取音频数据
-                if let audioData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
-                    DispatchQueue.main.async {
-                        print("音频数据大小: \(audioData.count) 字节")
-                        self.audioData.append(audioData)
-                        
-                        // 如果启用了实时转录并且有足够的数据，进行实时转录
-                        if self.isRealTimeTranscription && self.audioData.count > Int(inputFormat.sampleRate) * 2 * 2 { // 至少2秒的数据
-                            Task {
-                                await self.performRealTimeTranscription()
-                            }
+                    print("音频数据大小: \(audioData.count) 字节")
+                    self.audioData.append(audioData)
+                    
+                    // 如果启用了实时转录并且有足够的数据，进行实时转录
+                    if self.isRealTimeTranscription && self.audioData.count > Int(inputFormat.sampleRate) * 2 * 2 { // 至少2秒的数据
+                        Task {
+                            await self.performRealTimeTranscription()
                         }
                     }
-                } else {
-                    DispatchQueue.main.async {
-                        print("无法获取音频数据")
-                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    print("无法获取音频数据")
                 }
             }
-            
-            do {
-                // 连接输入节点到主混音器，确保音频流通过
-                audioEngine.connect(inputNode, to: audioEngine.mainMixerNode, format: inputFormat)
-                
-                try audioEngine.start()
-                print("音频录制已开始")
-            } catch {
-                print("无法启动音频引擎: \(error)")
-                isRecording = false
-                transcript = "录音启动失败: \(error.localizedDescription)"
-            }
+        }
+        
+        // 重要：断开输入节点与主混音器的连接以避免音频反馈（回音）
+        // 只连接输入节点到混音器而不播放，或者完全不连接
+        // 这样可以防止麦克风收录到扬声器播放的声音
+        
+        do {
+            // 准备音频引擎但不启动混音器连接以避免回音
+            audioEngine.prepare()
+            try audioEngine.start()
+            print("音频录制已开始")
+        } catch {
+            print("无法启动音频引擎: \(error)")
+            isRecording = false
+            transcript = "录音启动失败: \(error.localizedDescription)"
         }
     }
     
@@ -305,25 +314,41 @@ class AudioTranscriber: NSObject, ObservableObject {
         // 打印缓冲区信息
         print("缓冲区信息: 帧长度=\(frameLength), 通道数=\(channelCount)")
         
-        // 直接使用缓冲区数据，不需要转换
-        let data = Data(bytes: channelData[0], count: frameLength * MemoryLayout<Float>.size)
+        // 计算单声道数据大小（我们只处理第一个声道）
+        let byteSize = frameLength * MemoryLayout<Float>.size
+        
+        // 创建包含单声道数据的Data对象
+        let data = Data(bytes: channelData[0], count: byteSize)
         return data
     }
     
     func stopRecording() {
         isRecording = false
         
-        guard let audioEngine = audioEngine else { return }
+        guard let audioEngine = audioEngine else { 
+            transcript = "音频引擎未初始化"
+            return 
+        }
         
+        // 停止音频引擎
         audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
+        
+        // 移除所有tap
+        if audioEngine.inputNode.numberOfInputs > 0 {
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
         
         print("音频录制已停止")
         print("总音频数据大小: \(audioData.count) 字节")
         transcript = "录音已停止，正在处理..."
         
-        // 处理音频数据
-        processAudio()
+        // 只有在有音频数据时才处理
+        if !audioData.isEmpty {
+            // 处理音频数据
+            processAudio()
+        } else {
+            transcript = "没有录制到音频数据"
+        }
     }
     
     // 实时转录方法
@@ -404,9 +429,9 @@ class AudioTranscriber: NSObject, ObservableObject {
     }
     
     private func saveAudioDataToWAV(_ data: Data, format: AVAudioFormat?, url: URL) throws {
-        // 如果没有格式信息，使用默认值
-        let sampleRate = format?.sampleRate ?? 48000  // 使用实际的采样率（通常是48kHz）
-        let channels = format?.channelCount ?? 1
+        // 使用输入的音频格式信息，如果不可用则使用默认值
+        let sampleRate = format?.sampleRate ?? 44100  // 使用实际的采样率
+        let channels = 1  // 强制使用单声道以确保兼容性
         let bitDepth = 16 // 强制使用16位深度以兼容Whisper
         
         print("保存音频数据到WAV文件:")
@@ -435,15 +460,37 @@ class AudioTranscriber: NSObject, ObservableObject {
         let directory = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
         
+        // 删除已存在的文件
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+        
         try fileData.write(to: url)
         print("音频文件已保存到: \(url.path)")
         print("文件总大小: \(fileData.count) 字节")
+        
+        // 验证文件是否正确创建
+        if FileManager.default.fileExists(atPath: url.path) {
+            let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+            print("验证文件大小: \(attrs[.size] ?? "Unknown") 字节")
+        }
     }
     
     // 将浮点数据转换为16位PCM数据
     private func convertFloatToPCM16(_ floatData: Data) -> Data {
+        // 如果数据为空，返回空数据
+        guard !floatData.isEmpty else {
+            print("输入数据为空")
+            return Data()
+        }
+        
         // 计算浮点数的数量
         let floatCount = floatData.count / MemoryLayout<Float>.size
+        
+        // 检查数据大小是否正确
+        if floatData.count % MemoryLayout<Float>.size != 0 {
+            print("警告: 数据大小不是Float大小的整数倍")
+        }
         
         // 创建一个新的Data对象来存储转换后的16位数据
         var int16Data = Data(capacity: floatCount * MemoryLayout<Int16>.size)
@@ -453,6 +500,12 @@ class AudioTranscriber: NSObject, ObservableObject {
             // 计算当前浮点数在数据中的位置
             let offset = i * MemoryLayout<Float>.size
             
+            // 确保不会越界
+            if offset + MemoryLayout<Float>.size > floatData.count {
+                print("警告: 数据越界 at index \(i)")
+                break
+            }
+            
             // 从数据中提取浮点数
             let floatBytes = floatData.subdata(in: offset..<offset + MemoryLayout<Float>.size)
             let float = floatBytes.withUnsafeBytes { (rawBufferPointer) -> Float in
@@ -461,7 +514,9 @@ class AudioTranscriber: NSObject, ObservableObject {
             }
             
             // 将浮点数(-1.0到1.0)转换为16位整数(-32768到32767)
-            let int16Value = Int16(clamping: Int32(float * 32767.0))
+            // 添加边界检查
+            let clampedFloat = min(max(float, -1.0), 1.0)
+            let int16Value = Int16(clamping: Int32(clampedFloat * 32767.0))
             
             // 将Int16值转换为字节并添加到结果数据中
             var value = int16Value
@@ -469,6 +524,7 @@ class AudioTranscriber: NSObject, ObservableObject {
             int16Data.append(bytes)
         }
         
+        print("转换完成: \(floatCount) 个浮点数 -> \(int16Data.count) 字节")
         return int16Data
     }
     
@@ -531,6 +587,9 @@ class AudioTranscriber: NSObject, ObservableObject {
     func transcribeAudio(audioFilePath: String) async {
         guard let whisperKit = whisperKit else {
             print("WhisperKit 未初始化")
+            await MainActor.run {
+                self.transcript = "模型未正确加载，请重新下载模型"
+            }
             return
         }
         
@@ -543,24 +602,53 @@ class AudioTranscriber: NSObject, ObservableObject {
             return
         }
         
+        // 检查文件大小
+        do {
+            let fileAttributes = try FileManager.default.attributesOfItem(atPath: audioFilePath)
+            if let fileSize = fileAttributes[.size] as? NSNumber {
+                print("转录文件大小: \(fileSize) 字节")
+                if fileSize.intValue == 0 {
+                    await MainActor.run {
+                        self.transcript = "音频文件为空"
+                    }
+                    return
+                }
+            }
+        } catch {
+            print("无法获取文件信息: \(error)")
+        }
+        
         do {
             print("开始转录音频文件: \(audioFilePath)")
             let result = try await whisperKit.transcribe(audioPath: audioFilePath)
             print("转录完成")
             
             await MainActor.run {
-                if let results = result as? [TranscriptionResult], let firstResult = results.first {
-                    // 获取转录文本
-                    self.transcript = firstResult.text ?? "转录结果为空"
-                } else if let text = result as? String {
-                    // 如果结果直接是字符串
-                    self.transcript = text.isEmpty ? "转录结果为空" : text
+                // 处理转录结果，确保正确提取文本
+                var extractedText = "转录结果为空"
+                
+                if let results = result as? [TranscriptionResult] {
+                    // 如果是TranscriptionResult数组
+                    if let firstResult = results.first {
+                        extractedText = firstResult.text ?? "转录结果为空"
+                    }
+                } else if let textResults = result as? [String] {
+                    // 如果是字符串数组
+                    if let firstText = textResults.first {
+                        extractedText = firstText.isEmpty ? "转录结果为空" : firstText
+                    }
+                } else if let singleText = result as? String {
+                    // 如果是单个字符串
+                    extractedText = singleText.isEmpty ? "转录结果为空" : singleText
                 } else {
                     // 尝试获取text属性
-                    let text = (result as? NSObject)?.value(forKey: "text") as? String ?? "转录结果为空"
-                    self.transcript = text
+                    if let text = (result as? NSObject)?.value(forKey: "text") as? String {
+                        extractedText = text.isEmpty ? "转录结果为空" : text
+                    }
                 }
-                print("转录结果: \(self.transcript)")
+                
+                self.transcript = extractedText
+                print("转录结果: \(extractedText)")
             }
         } catch {
             print("转录失败: \(error)")
@@ -671,8 +759,13 @@ class AudioTranscriber: NSObject, ObservableObject {
     
     // 设置选择的音频设备
     func setSelectedDevice(index: Int) {
-        guard index < audioDevices.count else { return }
+        guard index < audioDevices.count else { 
+            print("无效的设备索引: \(index), 设备数量: \(audioDevices.count)")
+            return 
+        }
         selectedDeviceIndex = index
         selectedDeviceID = audioDevices[index].id
+        print("已选择设备索引: \(index), 设备ID: \(audioDevices[index].id), 设备名称: \(audioDevices[index].name)")
+        UserDefaults.standard.set(index, forKey: "SelectedDeviceIndex")
     }
 }
