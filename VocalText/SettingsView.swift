@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @EnvironmentObject var audioTranscriber: AudioTranscriber
     @Binding var isPresented: Bool
     @State private var selectedModel = "tiny"
     @State private var selectedDeviceIndex = 0
@@ -20,6 +21,14 @@ struct SettingsView: View {
         self._isPresented = isPresented
         self.audioDevices = audioDevices
         self.onDeviceSelected = onDeviceSelected
+        
+        // 從 UserDefaults 加載保存的設置
+        if let savedModel = UserDefaults.standard.string(forKey: "SelectedModel") {
+            self._selectedModel = State(initialValue: savedModel)
+        }
+        
+        // 從 UserDefaults 加載保存的設備索引
+        self._selectedDeviceIndex = State(initialValue: UserDefaults.standard.integer(forKey: "SelectedDeviceIndex"))
     }
     
     var body: some View {
@@ -36,6 +45,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             }
+            .padding(.top, 10)
             
             Divider()
             
@@ -46,11 +56,24 @@ struct SettingsView: View {
                 
                 Picker("选择模型", selection: $selectedModel) {
                     ForEach(models, id: \.self) { model in
-                        Text(model).tag(model)
+                        HStack {
+                            Text(model)
+                            if audioTranscriber.isModelAlreadyDownloaded(model: model) {
+                                Text("(已下载)")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                            } else {
+                                Text("(需要下载)")
+                                    .foregroundColor(.red)
+                                    .font(.caption)
+                            }
+                        }
+                        .tag(model)
                     }
                 }
                 .pickerStyle(RadioGroupPickerStyle())
             }
+            .padding(.horizontal, 10)
             
             Divider()
             
@@ -70,6 +93,7 @@ struct SettingsView: View {
                     onDeviceSelected?(newValue)
                 }
             }
+            .padding(.horizontal, 10)
             
             Divider()
             
@@ -79,13 +103,24 @@ struct SettingsView: View {
                     isPresented = false
                 }
                 .keyboardShortcut(.cancelAction)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
                 
                 Button("保存") {
-                    // 保存设置
+                    // 保存设置到 UserDefaults
+                    UserDefaults.standard.set(selectedModel, forKey: "SelectedModel")
+                    UserDefaults.standard.set(selectedDeviceIndex, forKey: "SelectedDeviceIndex")
+                    
+                    // 通知主視圖模型已更改
+                    NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
+                    
                     isPresented = false
                 }
                 .keyboardShortcut(.defaultAction)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
             }
+            .padding(.bottom, 10)
         }
         .padding()
         .frame(width: 450, height: 350) // 增大窗口尺寸

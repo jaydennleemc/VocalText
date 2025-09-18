@@ -13,7 +13,12 @@ struct MainView: View {
     @StateObject private var audioTranscriber = AudioTranscriber()
     @State private var isRecording = false
     @State private var showSettingsView = false
-    @State private var selectedModel = "Tiny"
+    @State private var selectedModel = "Tiny" {
+        didSet {
+            // 保存選擇的模型到 UserDefaults
+            UserDefaults.standard.set(selectedModel, forKey: "SelectedModel")
+        }
+    }
     @State private var hasMicrophonePermission = false
     @State private var modelDownloaded = false
     @State private var isRealTimeMode = false // 实时转录模式
@@ -33,7 +38,7 @@ struct MainView: View {
                     .foregroundColor(isRealTimeMode ? .blue : .gray)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .padding(4)
+                .padding(8)
                 
                 Spacer()
                 
@@ -45,7 +50,7 @@ struct MainView: View {
                         .foregroundColor(.gray)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .padding(4)
+                .padding(8)
                 .sheet(isPresented: $showSettingsView) {
                     SettingsView(
                         isPresented: $showSettingsView,
@@ -54,6 +59,11 @@ struct MainView: View {
                             audioTranscriber.setSelectedDevice(index: index)
                         }
                     )
+                    .environmentObject(audioTranscriber)
+                    .onDisappear {
+                        // 當設置視圖關閉時，重新檢查模型下載狀態
+                        checkModelDownloaded()
+                    }
                 }
             }
             
@@ -108,9 +118,29 @@ struct MainView: View {
                     Button(action: {
                         isRecording.toggle()
                         if isRecording {
-                            // 设置模型并开始录音
+                            // 設置模型並開始錄音
                             audioTranscriber.setModel(selectedModel)
-                            audioTranscriber.startRecording()
+                            // 再次檢查模型是否已下載
+                            if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased()) {
+                                // 如果模型未下載，先下載模型
+                                Task {
+                                    let downloadSuccess = await audioTranscriber.checkAndDownloadModelIfNeeded()
+                                    if downloadSuccess {
+                                        DispatchQueue.main.async {
+                                            modelDownloaded = true
+                                            audioTranscriber.startRecording()
+                                        }
+                                    } else {
+                                        DispatchQueue.main.async {
+                                            self.isRecording = false
+                                            self.modelDownloaded = false
+                                            // 錯誤訊息會在 AudioTranscriber 中處理
+                                        }
+                                    }
+                                }
+                            } else {
+                                audioTranscriber.startRecording()
+                            }
                         } else {
                             audioTranscriber.stopRecording()
                         }
@@ -134,8 +164,38 @@ struct MainView: View {
         .frame(width: 400, height: 300) // 增大窗口尺寸
         .onAppear {
             checkMicrophonePermission()
-            checkModelDownloaded()
             audioTranscriber.getAvailableAudioDevices()
+            
+            // 從 UserDefaults 加載保存的設置
+            if let savedModel = UserDefaults.standard.string(forKey: "SelectedModel") {
+                selectedModel = savedModel
+            }
+            
+            // 檢查模型是否已下載
+            checkModelDownloaded()
+            
+            // 註冊模型更改通知
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ModelChanged"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                // 從 UserDefaults 重新加載保存的設置
+                if let savedModel = UserDefaults.standard.string(forKey: "SelectedModel") {
+                    selectedModel = savedModel
+                }
+                
+                // 重新檢查模型是否已下載
+                checkModelDownloaded()
+            }
+            
+            // 延遲設置設備選擇，確保音頻設備已加載
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let savedDeviceIndex = UserDefaults.standard.integer(forKey: "SelectedDeviceIndex")
+                if savedDeviceIndex < audioTranscriber.audioDevices.count {
+                    audioTranscriber.setSelectedDevice(index: savedDeviceIndex)
+                }
+            }
         }
     }
     
@@ -173,8 +233,9 @@ struct MainView: View {
     
     // 检查模型是否已下载
     private func checkModelDownloaded() {
-        // 检查模型是否已下载
-        modelDownloaded = audioTranscriber.isModelDownloaded
+        // 检查当前选择的模型是否已下载
+        modelDownloaded = audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased())
+        print("检查模型下载状态: \(modelDownloaded) for model: \(selectedModel.lowercased())")
     }
     
     // 下载默认模型
@@ -184,6 +245,10 @@ struct MainView: View {
             let success = await audioTranscriber.checkAndDownloadModelIfNeeded()
             DispatchQueue.main.async {
                 modelDownloaded = success
+                if success {
+                    // 发送通知更新UI
+                    NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
+                }
             }
         }
     }

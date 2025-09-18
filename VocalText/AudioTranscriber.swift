@@ -51,23 +51,49 @@ class AudioTranscriber: NSObject, ObservableObject {
         isRealTimeTranscription = enable
     }
     
-    func isModelAlreadyDownloaded() -> Bool {
-        // 检查模型是否已下载
-        let modelPath = getModelPath(for: currentModel)
+    func isModelAlreadyDownloaded(model: String) -> Bool {
+        // 检查指定模型是否已下载
+        let modelPath = getModelPath(for: model)
         let fileManager = FileManager.default
-        return fileManager.fileExists(atPath: modelPath)
+        let exists = fileManager.fileExists(atPath: modelPath)
+        print("模型 \(model) 是否存在: \(exists) at path: \(modelPath)")
+        
+        // 检查模型目录中是否包含必要的文件
+        if exists {
+            let requiredFiles = ["AudioEncoder.mlmodelc", "MelSpectrogram.mlmodelc", "TextDecoder.mlmodelc"]
+            for file in requiredFiles {
+                let filePath = "\(modelPath)/\(file)"
+                if !fileManager.fileExists(atPath: filePath) {
+                    print("模型 \(model) 缺少必要文件: \(file)")
+                    modelDownloaded = false
+                    return false
+                }
+            }
+            print("模型 \(model) 已完整下载")
+            modelDownloaded = true
+            return true
+        }
+        
+        modelDownloaded = false
+        return false
+    }
+    
+    func isModelAlreadyDownloaded() -> Bool {
+        // 检查当前模型是否已下载
+        return isModelAlreadyDownloaded(model: currentModel)
     }
     
     private func getModelPath(for model: String) -> String {
         // 获取模型路径
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
-        let modelPath = "\(documentsPath)/whisperkit-coreml/openai_whisper-\(model)"
+        let modelPath = "\(documentsPath)/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-\(model)"
+        print("检查模型路径: \(modelPath)")
         return modelPath
     }
     
     func checkAndDownloadModelIfNeeded() async -> Bool {
         // 检查模型是否已下载
-        if isModelAlreadyDownloaded() {
+        if isModelAlreadyDownloaded(model: currentModel) {
             modelDownloaded = true
             return true
         }
@@ -96,11 +122,38 @@ class AudioTranscriber: NSObject, ObservableObject {
             isDownloading = false
             downloadStatus = "模型下载完成"
             modelDownloaded = true // 标记模型已下载
+            
+            // 添加调试日志
+            print("模型下载完成，modelDownloaded = \(modelDownloaded)")
             return true
-        } catch {
+        } catch let error as NSError {
             print("模型下载失败: \(error)")
             isDownloading = false
             downloadStatus = "模型下载失败: \(error.localizedDescription)"
+            modelDownloaded = false // 确保标记为未下载
+            
+            // 提供更详细的错误信息
+            if error.domain == NSURLErrorDomain {
+                switch error.code {
+                case NSURLErrorNotConnectedToInternet:
+                    downloadStatus = "模型下载失败: 无网络连接"
+                case NSURLErrorTimedOut:
+                    downloadStatus = "模型下载失败: 连接超时"
+                case NSURLErrorCannotFindHost:
+                    downloadStatus = "模型下载失败: 无法找到服务器"
+                default:
+                    downloadStatus = "模型下载失败: 网络错误 (\(error.localizedDescription))"
+                }
+            } else {
+                downloadStatus = "模型下载失败: \(error.localizedDescription)"
+            }
+            
+            return false
+        } catch {
+            print("模型下载失败: \(error)")
+            isDownloading = false
+            downloadStatus = "模型下载失败: 未知错误"
+            modelDownloaded = false // 确保标记为未下载
             return false
         }
     }
