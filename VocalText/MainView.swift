@@ -9,6 +9,77 @@ import SwiftUI
 import AppKit
 import AVFoundation
 
+// 类似iOS语音备忘录的波形视图
+struct VoiceMemoWaveformView: View {
+    @Binding var volumeLevel: Double
+    @State private var bars: [CGFloat] = Array(repeating: 0.1, count: 50)
+    @State private var lastVolumeUpdate: Date = Date()
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<bars.count, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.red, Color.red.opacity(0.7)]),
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
+                    )
+                    .frame(width: 4, height: max(2, bars[index] * 60))
+                    .animation(.easeOut(duration: 0.15), value: bars[index])
+            }
+        }
+        .frame(height: 60)
+        .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
+            updateBars()
+        }
+        // 监听音量变化并立即更新
+        .onChange(of: volumeLevel) { _ in
+            updateBarsWithVolume()
+        }
+    }
+    
+    private func updateBars() {
+        // 创建类似iOS语音备忘录的波形效果
+        // 移除第一个条形，创建从右到左的滚动效果
+        bars.removeFirst()
+        
+        // 根据音量添加新的条形高度
+        // 使用当前音量级别作为主要因素
+        let newBarHeight = CGFloat(volumeLevel)
+        bars.append(newBarHeight)
+        
+        // 应用平滑效果，使相邻条形高度变化更自然
+        if bars.count >= 3 {
+            for i in 1..<bars.count-1 {
+                bars[i] = (bars[i-1] + bars[i] + bars[i+1]) / 3
+            }
+        }
+    }
+    
+    private func updateBarsWithVolume() {
+        // 直接响应音量变化更新最后一个条形
+        if !bars.isEmpty {
+            // 使用当前音量级别作为主要因素，添加一些随机性使波形更自然
+            let randomFactor = Double.random(in: 0.8...1.2)
+            let adjustedVolume = volumeLevel * randomFactor
+            let newBarHeight = CGFloat(min(1.0, adjustedVolume))
+            bars[bars.count - 1] = newBarHeight
+            
+            // 应用局部平滑效果
+            let index = bars.count - 1
+            if index >= 2 {
+                for i in (index - 2)..<index {
+                    if i > 0 && i < bars.count - 1 {
+                        bars[i] = (bars[i-1] + bars[i] + bars[i+1]) / 3
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct WaveAnimation: View {
     @State private var waveOffset = 0.0
     
@@ -45,6 +116,8 @@ struct MainView: View {
     }
     @State private var hasMicrophonePermission = false
     @State private var modelDownloaded = false
+    @State private var isModelDownloading = false
+    @State private var hasCheckedModelStatus = false
     
     var body: some View {
         ZStack {
@@ -69,7 +142,16 @@ struct MainView: View {
                 Spacer()
                 
                 // 显示下载进度或转录文本
-                if audioTranscriber.isDownloading {
+                if !hasCheckedModelStatus {
+                    // 还未检查模型状态，显示加载状态
+                    VStack {
+                        Text("正在检查模型状态...")
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .padding()
+                    }
+                    .opacity(showSettingsView ? 0 : 1)
+                } else if audioTranscriber.isDownloading || isModelDownloading {
                     VStack {
                         Text(audioTranscriber.downloadStatus)
                         ProgressView(value: audioTranscriber.downloadProgress)
@@ -80,7 +162,8 @@ struct MainView: View {
                 } else {
                     Group {
                         if isRecording {
-                            WaveAnimation()
+                            // 使用类似iOS语音备忘录的波形视图
+                            VoiceMemoWaveformView(volumeLevel: $audioTranscriber.volumeLevel)
                         } else {
                             Text(audioTranscriber.transcript)
                                 .onTapGesture {
@@ -100,8 +183,13 @@ struct MainView: View {
                 
                 Spacer()
                 
+                Spacer()
+                
                 // 根据状态显示不同的按钮
-                if !hasMicrophonePermission {
+                if !hasCheckedModelStatus {
+                    // 还未检查模型状态，不显示任何按钮
+                    EmptyView()
+                } else if !hasMicrophonePermission {
                     // 请求麦克风权限按钮
                     Button(action: {
                         requestMicrophonePermission()
@@ -109,20 +197,6 @@ struct MainView: View {
                         Text("获取麦克风权限")
                             .padding()
                             .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding()
-                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏按钮
-                } else if !modelDownloaded {
-                    // 下载模型按钮
-                    Button(action: {
-                        downloadDefaultModel()
-                    }) {
-                        Text("下载默认模型")
-                            .padding()
-                            .background(Color.gray)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
@@ -141,46 +215,19 @@ struct MainView: View {
                                 if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
                                     audioTranscriber.setLanguage(savedLanguage)
                                 }
-                                // 再次檢查模型是否已下載
-                                if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased()) {
-                                    // 如果模型未下載，先下載模型
-                                    Task {
-                                        let downloadSuccess = await audioTranscriber.checkAndDownloadModelIfNeeded()
-                                        if downloadSuccess {
-                                            DispatchQueue.main.async {
-                                                modelDownloaded = true
-                                                audioTranscriber.startRecording()
-                                            }
-                                        } else {
-                                            DispatchQueue.main.async {
-                                                self.isRecording = false
-                                                self.modelDownloaded = false
-                                                // 錯誤訊息會在 AudioTranscriber 中處理
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    // 确保modelDownloaded状态正确
-                                    modelDownloaded = true
-                                    audioTranscriber.startRecording()
-                                }
+                                // 直接开始录音，模型检查在AudioTranscriber内部处理
+                                audioTranscriber.startRecording()
                             } else {
                                 audioTranscriber.stopRecording()
                             }
                         }) {
-                            HStack {
-                                Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                                    .font(.title)
-                                Text(isRecording ? "停止录音" : "开始录音")
-                                    .fontWeight(.semibold)
-                            }
-                            .padding()
-                            .background(isRecording ? Color.red : Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
+                            Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(isRecording ? .red : .blue)
                         }
                         .buttonStyle(PlainButtonStyle())
                         .padding()
+                        .disabled(isModelDownloading) // 下载期间禁用录音按钮
                     }
                     .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏按钮
                 }
@@ -194,8 +241,8 @@ struct MainView: View {
                 )
                 .environmentObject(audioTranscriber)
                 .onDisappear {
-                    // 當設置視圖關閉時，重新檢查模型下載狀態
-                    checkModelDownloaded()
+                    // 當設置視圖關閉時，重新檢查模型狀態
+                    checkModelStatus()
                 }
             }
         }
@@ -210,7 +257,7 @@ struct MainView: View {
             }
             
             // 檢查模型是否已下載
-            checkModelDownloaded()
+            checkModelStatus()
             
             // 註冊模型更改通知
             NotificationCenter.default.addObserver(
@@ -224,7 +271,19 @@ struct MainView: View {
                 }
                 
                 // 重新檢查模型是否已下載
-                checkModelDownloaded()
+                checkModelStatus()
+            }
+            
+            // 註冊模型下載請求通知
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ModelDownloadRequested"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let model = notification.object as? String {
+                    // 开始下载模型
+                    downloadModel(model: model)
+                }
             }
             
             // 延遲設置設備選擇，確保音頻設備已加載
@@ -274,6 +333,27 @@ struct MainView: View {
         }
     }
     
+    // 检查模型状态
+    private func checkModelStatus() {
+        // 检查当前选择的模型是否已下载
+        let isDownloaded = audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased())
+        modelDownloaded = isDownloaded
+        hasCheckedModelStatus = true
+        print("检查模型下载状态: \(isDownloaded) for model: \(selectedModel.lowercased())")
+        
+        // 如果模型未下载，自动开始下载
+        if !isDownloaded {
+            downloadModel(model: selectedModel)
+        }
+        
+        // 如果模型已下载，预加载WhisperKit
+        if isDownloaded {
+            Task {
+                await audioTranscriber.preloadWhisperKit()
+            }
+        }
+    }
+    
     // 检查模型是否已下载
     private func checkModelDownloaded() {
         // 检查当前选择的模型是否已下载
@@ -298,6 +378,32 @@ struct MainView: View {
         Task {
             let success = await audioTranscriber.checkAndDownloadModelIfNeeded()
             DispatchQueue.main.async {
+                modelDownloaded = success
+                if success {
+                    // 发送通知更新UI
+                    NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
+                }
+            }
+        }
+    }
+    
+    // 下载指定模型
+    private func downloadModel(model: String) {
+        // 设置要下载的模型
+        audioTranscriber.setModel(model)
+        
+        // 设置语言
+        if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+            audioTranscriber.setLanguage(savedLanguage)
+        }
+        
+        // 开始下载并显示进度
+        isModelDownloading = true
+        
+        Task {
+            let success = await audioTranscriber.checkAndDownloadModelIfNeeded()
+            DispatchQueue.main.async {
+                isModelDownloading = false
                 modelDownloaded = success
                 if success {
                     // 发送通知更新UI

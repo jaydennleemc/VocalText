@@ -26,6 +26,7 @@ class AudioTranscriber: NSObject, ObservableObject {
     @Published var isDownloading = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadStatus = "准备下载模型..."
+    @Published var volumeLevel: Double = 0.0 // 添加音量级别属性
     
     // 音频设备相关属性
     @Published var audioDevices: [AudioDevice] = []
@@ -169,9 +170,14 @@ class AudioTranscriber: NSObject, ObservableObject {
                         return
                     }
                     
-                    // 初始化WhisperKit然后开始录音
-                    Task {
-                        await self.initializeWhisperKitAndStartRecording()
+                    // 如果WhisperKit已经初始化，直接开始录音
+                    if self.whisperKit != nil {
+                        self.startAudioEngine()
+                    } else {
+                        // 初始化WhisperKit然后开始录音
+                        Task {
+                            await self.initializeWhisperKitAndStartRecording()
+                        }
                     }
                 } else {
                     self?.transcript = "麦克风权限被拒绝"
@@ -182,6 +188,7 @@ class AudioTranscriber: NSObject, ObservableObject {
     }
     
     private var selectedLanguage: String = "zh" // 默认语言为中文
+    private var isWhisperKitPreloading = false // 标记WhisperKit是否正在预加载
     
     func setLanguage(_ language: String) {
         selectedLanguage = language
@@ -194,7 +201,41 @@ class AudioTranscriber: NSObject, ObservableObject {
         }
     }
     
+    // 预加载WhisperKit以减少首次录音延迟
+    func preloadWhisperKit() async {
+        // 避免重复预加载
+        guard !isWhisperKitPreloading && whisperKit == nil else { return }
+        
+        isWhisperKitPreloading = true
+        print("开始预加载WhisperKit...")
+        
+        do {
+            // 根据选择的模型初始化WhisperKit
+            var config = WhisperKitConfig(model: currentModel)
+            let loadedWhisperKit = try await WhisperKit(config)
+            
+            await MainActor.run {
+                self.whisperKit = loadedWhisperKit
+                self.isWhisperKitPreloading = false
+                print("WhisperKit 预加载完成")
+            }
+        } catch {
+            print("WhisperKit 预加载失败: \(error)")
+            await MainActor.run {
+                self.isWhisperKitPreloading = false
+            }
+        }
+    }
+    
     private func initializeWhisperKitAndStartRecording() async {
+        // 如果WhisperKit已经初始化，直接开始录音
+        if whisperKit != nil {
+            await MainActor.run {
+                self.startAudioEngine()
+            }
+            return
+        }
+        
         // 初始化WhisperKit
         do {
             // 根据选择的模型初始化WhisperKit
@@ -268,10 +309,14 @@ class AudioTranscriber: NSObject, ObservableObject {
             let channelCount = Int(buffer.format.channelCount)
             let frameLength = Int(buffer.frameLength)
             
+            // 计算音量级别
+            let volume = self.calculateVolume(from: buffer)
+            
             // 打印调试信息
             DispatchQueue.main.async {
-                print("接收到音频数据: \(buffer.frameLength) 帧")
+                print("接收到音频数据: \(buffer.frameLength) 帧, 音量: \(volume)")
                 print("缓冲区大小: \(buffer.frameCapacity)")
+                self.volumeLevel = volume // 更新音量级别
             }
             
             // 获取音频数据
@@ -325,6 +370,44 @@ class AudioTranscriber: NSObject, ObservableObject {
         // 创建包含单声道数据的Data对象
         let data = Data(bytes: channelData[0], count: byteSize)
         return data
+    }
+    
+    // 计算音量级别
+    private func calculateVolume(from buffer: AVAudioPCMBuffer) -> Double {
+        guard let channelData = buffer.floatChannelData else { return 0.0 }
+        
+        let frameLength = Int(buffer.frameLength)
+        if frameLength == 0 { return 0.0 }
+        
+        let data = channelData[0]
+        var sum: Double = 0.0
+        
+        // 计算均方根(RMS)音量
+        for i in 0..<frameLength {
+            let sample = data[i]
+            sum += Double(sample * sample)
+        }
+        
+        let mean = sum / Double(frameLength)
+        let rms = sqrt(mean)
+        
+        // 将RMS值转换为分贝
+        let db = 20 * log10(rms)
+        
+        // 将分贝值映射到0-1范围，-80dB为最小值，-10dB为最大值
+        let minDB: Double = -80.0
+        let maxDB: Double = -10.0
+        var level = (db - minDB) / (maxDB - minDB)
+        
+        // 确保级别在0-1范围内
+        level = max(0.0, min(1.0, level))
+        
+        // 添加一些增强效果，使音量变化更明显
+        // 使用平方值和缩放使变化更明显
+        level = level * level * 2.0
+        level = min(1.0, level) // 确保不超过1.0
+        
+        return level
     }
     
     func stopRecording() {

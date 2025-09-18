@@ -144,8 +144,13 @@ struct SettingsView: View {
                     audioTranscriber.setSelectedDevice(index: selectedDeviceIndex)
                     audioTranscriber.setLanguage(selectedLanguage)
                     
-                    // 通知主视图模型已更改
-                    NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
+                    // 检查模型是否已下载，如果未下载则通知主视图开始下载
+                    if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel) {
+                        NotificationCenter.default.post(name: Notification.Name("ModelDownloadRequested"), object: selectedModel)
+                    } else {
+                        // 通知主视图模型已更改
+                        NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
+                    }
                     
                     print("设置已保存 - 模型: \(selectedModel), 设备索引: \(selectedDeviceIndex), 语言: \(selectedLanguage)")
                     
