@@ -189,7 +189,15 @@ struct MainView: View {
                     Group {
                         if isRecording {
                             // 使用类似iOS语音备忘录的波形视图
-                            VoiceMemoWaveformView(volumeLevel: $audioTranscriber.volumeLevel)
+                            VStack {
+                                VoiceMemoWaveformView(volumeLevel: $audioTranscriber.volumeLevel)
+                                
+                                // 添加录音时间显示
+                                Text(formatTime(audioTranscriber.recordingTime))
+                                    .font(.body)  // 使用稍大的字体
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 12)  // 增加顶部间距
+                            }
                         } else {
                             // 根据权限状态显示不同的文本
                             if !hasMicrophonePermission && hasRequestedMicrophonePermission {
@@ -601,6 +609,14 @@ struct MainView: View {
                 print("通知权限被拒绝: \(error)")
             }
         }
+    }
+    
+    // 格式化时间显示
+    private func formatTime(_ timeInterval: TimeInterval) -> String {
+        let minutes = Int(timeInterval) / 60
+        let seconds = Int(timeInterval) % 60
+        let centiseconds = Int((timeInterval.truncatingRemainder(dividingBy: 1)) * 100)  // 百分之一秒
+        return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
     }
 }
 

@@ -21,6 +21,7 @@ class AudioTranscriber: NSObject, ObservableObject {
     private var audioFormat: AVAudioFormat? // 存储音频格式信息
     private var selectedDeviceID: AudioDeviceID? // 存储选择的音频设备ID
     private var deviceMonitoringTimer: Timer? // 用于存储设备监控定时器
+    private var recordingTimer: Timer? // 用于存储录音计时器
     
     @Published var isRecording = false
     @Published var isTranscribing = false // 添加转录状态
@@ -29,6 +30,7 @@ class AudioTranscriber: NSObject, ObservableObject {
     @Published var downloadProgress: Double = 0.0
     @Published var downloadStatus = "準備下載模型..."
     @Published var volumeLevel: Double = 0.0 // 添加音量级别属性
+    @Published var recordingTime: TimeInterval = 0.0 // 添加录音时间属性
     
     // 音频设备相关属性
     @Published var audioDevices: [AudioDevice] = []
@@ -207,8 +209,16 @@ class AudioTranscriber: NSObject, ObservableObject {
         }
         
         isRecording = true
+        recordingTime = 0.0 // 重置录音时间
         transcript = "正在錄音..."
         audioData = Data() // 重置音频数据
+        
+        // 启动录音计时器
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            DispatchQueue.main.async {
+                self.recordingTime += 0.1
+            }
+        }
         
         // 发送录音开始通知
         NotificationCenter.default.post(name: Notification.Name("RecordingStarted"), object: nil)
@@ -470,6 +480,11 @@ class AudioTranscriber: NSObject, ObservableObject {
     
     func stopRecording() {
         isRecording = false
+        recordingTime = 0.0 // 重置录音时间
+        
+        // 停止录音计时器
+        recordingTimer?.invalidate()
+        recordingTimer = nil
         
         // 发送录音停止通知
         NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
@@ -923,5 +938,7 @@ class AudioTranscriber: NSObject, ObservableObject {
     deinit {
         deviceMonitoringTimer?.invalidate()
         deviceMonitoringTimer = nil
+        recordingTimer?.invalidate()
+        recordingTimer = nil
     }
 }
