@@ -1,0 +1,89 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        xcode: ["16.0"]
+    
+    runs-on: macos-15
+    
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    
+    - name: Set up Xcode
+      run: |
+        sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
+        xcodebuild -version
+    
+    - name: Build app
+      run: |
+        xcodebuild -project VocalText.xcodeproj \
+          -scheme VocalText \
+          -configuration Release \
+          -derivedDataPath DerivedData \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_ALLOWED=NO
+    
+    - name: Create build artifacts directory
+      run: mkdir -p build-artifacts
+    
+    - name: Copy app bundle to artifacts directory
+      run: |
+        cp -R DerivedData/Build/Products/Release/VocalText.app build-artifacts/
+    
+    - name: Create DMG
+      run: |
+        brew install create-dmg
+        create-dmg \
+          --volname "VocalText Installer" \
+          --window-pos 200 120 \
+          --window-size 800 400 \
+          --icon-size 100 \
+          --app-drop-link 600 185 \
+          "build-artifacts/VocalText.dmg" \
+          "build-artifacts/VocalText.app"
+    
+    - name: Archive build artifacts
+      run: |
+        tar -cJf build-artifacts/VocalText-macOS.tar.xz -C build-artifacts VocalText.app
+    
+    - name: Upload DMG as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: VocalText.dmg
+        path: build-artifacts/VocalText.dmg
+    
+    - name: Upload app bundle as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: VocalText.tar.xz
+        path: build-artifacts/VocalText-macOS.tar.xz
+    
+    # If this is a release, upload the DMG to the release
+    - name: Upload DMG to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: build-artifacts/VocalText.dmg
+        asset_name: VocalText.dmg
+        asset_content_type: application/octet-stream
