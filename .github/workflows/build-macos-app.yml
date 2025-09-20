@@ -46,27 +46,19 @@ jobs:
     - name: Create build artifacts directory
       run: mkdir -p build-artifacts
     
-    - name: Create DMG
+    - name: Copy app bundle to artifacts directory
       run: |
-        brew install create-dmg
-        create-dmg \
-          --volname "VocalText Installer" \
-          --window-pos 200 120 \
-          --window-size 800 400 \
-          --icon-size 100 \
-          --app-drop-link 600 185 \
-          "build-artifacts/VocalText-${{ env.APP_VERSION }}.dmg" \
-          "build-artifacts/VocalText.app"
-
-    - name: Archive build artifacts
-      run: |
-        tar -cJf build-artifacts/VocalText-macOS-${{ env.APP_VERSION }}.tar.xz -C build-artifacts VocalText.app
+        cp -R DerivedData/Build/Products/Release/VocalText.app build-artifacts/
     
-    - name: Upload DMG as artifact
+    - name: Create ZIP archive
+      run: |
+        zip -r "build-artifacts/VocalText-${{ env.APP_VERSION }}.zip" "build-artifacts/VocalText.app"
+    
+    - name: Upload ZIP as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: VocalText-${{ env.APP_VERSION }}.dmg
-        path: build-artifacts/VocalText-${{ env.APP_VERSION }}.dmg
+        name: VocalText-${{ env.APP_VERSION }}.zip
+        path: build-artifacts/VocalText-${{ env.APP_VERSION }}.zip
     
     - name: Upload app bundle as artifact
       uses: actions/upload-artifact@v4

@@ -53,17 +53,13 @@ jobs:
     - name: Create build artifacts directory
       run: mkdir -p build-artifacts
     
-    - name: Create DMG
+    - name: Copy app bundle to artifacts directory
       run: |
-        brew install create-dmg
-        create-dmg \
-          --volname "VocalText Installer" \
-          --window-pos 200 120 \
-          --window-size 800 400 \
-          --icon-size 100 \
-          --app-drop-link 600 185 \
-          "build-artifacts/VocalText-${{ env.APP_VERSION }}.dmg" \
-          "build-artifacts/VocalText.app"
+        cp -R DerivedData/Build/Products/Release/VocalText.app build-artifacts/
+    
+    - name: Create ZIP archive
+      run: |
+        zip -r "build-artifacts/VocalText-${{ env.APP_VERSION }}.zip" "build-artifacts/VocalText.app"
 
     - name: Archive build artifacts
       run: |
@@ -79,12 +75,12 @@ jobs:
         draft: false
         prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
     
-    - name: Upload DMG to release
+    - name: Upload ZIP to release
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build-artifacts/VocalText-${{ env.APP_VERSION }}.dmg
-        asset_name: VocalText-${{ env.APP_VERSION }}.dmg
-        asset_content_type: application/octet-stream
+        asset_path: build-artifacts/VocalText-${{ env.APP_VERSION }}.zip
+        asset_name: VocalText-${{ env.APP_VERSION }}.zip
+        asset_content_type: application/zip
