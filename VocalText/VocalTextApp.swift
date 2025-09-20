@@ -30,6 +30,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = MenuBarController()
     }
     
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // 这里可以添加退出前的检查逻辑
+        // 目前我们允许应用正常退出，但可以在关键操作期间提示用户
+        return .terminateNow
+    }
+    
     private func copyPreDownloadedModelsIfNeeded() {
         // 获取应用程序文档目录
         guard let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first else {
@@ -47,11 +53,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let contents = try fileManager.contentsOfDirectory(atPath: targetPath)
                 if !contents.isEmpty {
-                    print("模型目录已存在且不为空，跳过拷贝")
+                    print("模型目錄已存在且不為空，跳過拷貝")
                     return
                 }
             } catch {
-                print("检查目标目录内容失败: \(error)")
+                print("檢查目標目錄內容失敗: \(error)")
             }
         }
         
@@ -59,18 +65,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try fileManager.createDirectory(atPath: targetPath, withIntermediateDirectories: true, attributes: nil)
         } catch {
-            print("创建目标目录失败: \(error)")
+            print("創建目標目錄失敗: \(error)")
             return
         }
         
         // 获取应用程序包中的预下载模型路径
         guard let sourcePath = Bundle.main.path(forResource: "Whisper/whisperkit-coreml", ofType: nil) else {
-            print("未找到预下载的模型")
+            print("未找到預下載的模型")
             return
         }
         
-        print("源模型路径: \(sourcePath)")
-        print("目标模型路径: \(targetPath)")
+        print("源模型路徑: \(sourcePath)")
+        print("目標模型路徑: \(targetPath)")
         
         // 拷贝模型文件
         do {
@@ -83,17 +89,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 // 检查目标路径是否已存在
                 if fileManager.fileExists(atPath: targetItemPath) {
-                    print("文件 \(item) 已存在，跳过拷贝")
+                    print("文件 \(item) 已存在，跳過拷貝")
                     continue
                 }
                 
-                print("正在拷贝 \(item)...")
+                print("正在拷貝 \(item)...")
                 try fileManager.copyItem(atPath: sourceItemPath, toPath: targetItemPath)
             }
             
-            print("预下载模型拷贝完成")
+            print("預下載模型拷貝完成")
         } catch {
-            print("拷贝预下载模型失败: \(error)")
+            print("拷貝預下載模型失敗: \(error)")
         }
     }
 }

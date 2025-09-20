@@ -8,6 +8,7 @@
 import SwiftUI
 import AppKit
 import AVFoundation
+import UserNotifications
 
 // 类似iOS语音备忘录的波形视图
 struct VoiceMemoWaveformView: View {
@@ -108,6 +109,7 @@ struct MainView: View {
     @StateObject private var audioTranscriber = AudioTranscriber()
     @State private var isRecording = false
     @State private var showSettingsView = false
+    @State private var showTutorialView = false
     @State private var selectedModel = "Tiny" {
         didSet {
             // 保存選擇的模型到 UserDefaults
@@ -115,9 +117,13 @@ struct MainView: View {
         }
     }
     @State private var hasMicrophonePermission = false
+    @State private var isCheckingMicrophonePermission = true // 新增状态，用于跟踪是否正在检查麦克风权限
+    @State private var hasRequestedMicrophonePermission = false // 新增状态，用于跟踪是否已经请求过麦克风权限
     @State private var modelDownloaded = false
     @State private var isModelDownloading = false
     @State private var hasCheckedModelStatus = false
+    @State private var hasAudioInputDevices = true // 新增状态，用于跟踪是否有音频输入设备
+    @State private var isDownloadingModel = false // 新增状态，用于跟踪是否正在下载模型
     
     var body: some View {
         ZStack {
@@ -136,21 +142,31 @@ struct MainView: View {
                     .buttonStyle(PlainButtonStyle())
                     .padding(.top, 12)
                     .padding(.trailing, 16)
+                    .disabled(audioTranscriber.isRecording || audioTranscriber.isTranscribing || showTutorialView) // 录音、转录或教程期间禁用设置按钮
                 }
-                .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏设置按钮
+                .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏设置按钮
                 
                 Spacer()
                 
-                // 显示下载进度或转录文本
+                // 显示下载进度、转录文本或处理中状态
                 if !hasCheckedModelStatus {
                     // 还未检查模型状态，显示加载状态
                     VStack {
-                        Text("正在检查模型状态...")
+                        Text("正在檢查模型狀態...")
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                             .padding()
                     }
-                    .opacity(showSettingsView ? 0 : 1)
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
+                } else if isCheckingMicrophonePermission {
+                    // 正在检查麦克风权限，显示加载状态
+                    VStack {
+                        Text("正在請求麥克風權限...")
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .padding()
+                    }
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
                 } else if audioTranscriber.isDownloading || isModelDownloading {
                     VStack {
                         Text(audioTranscriber.downloadStatus)
@@ -158,26 +174,68 @@ struct MainView: View {
                             .progressViewStyle(LinearProgressViewStyle())
                             .padding()
                     }
-                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏内容
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏内容
+                } else if audioTranscriber.isTranscribing {
+                    // 显示转录处理中状态
+                    VStack {
+                        Spacer()
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .scaleEffect(1.0)
+                        Spacer()
+                    }
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏内容
                 } else {
                     Group {
                         if isRecording {
                             // 使用类似iOS语音备忘录的波形视图
                             VoiceMemoWaveformView(volumeLevel: $audioTranscriber.volumeLevel)
                         } else {
-                            Text(audioTranscriber.transcript)
-                                .onTapGesture {
-                                    copyToClipboard(audioTranscriber.transcript)
+                            // 根据权限状态显示不同的文本
+                            if !hasMicrophonePermission && hasRequestedMicrophonePermission {
+                                // 用户拒绝了麦克风权限
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("需要麥克風權限才能錄音")
+                                        .font(.headline)
+                                    Text("此應用需要訪問您的麥克風以錄製音頻並轉錄為文字。請點擊下方按鈕授予權限。")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
-                                .contextMenu {
-                                    Button("复制到剪贴板") {
-                                        copyToClipboard(audioTranscriber.transcript)
+                                .padding()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            } else {
+                                // 正常显示转录文本
+                                Group {
+                                    if audioTranscriber.transcript == "點擊開始錄音..." && !hasAudioInputDevices {
+                                        // 没有音频输入设备时显示麦克风加斜线图标
+                                        VStack {
+                                            Image(systemName: "mic.slash.fill")
+                                                .font(.system(size: 40))
+                                                .foregroundColor(.gray)
+                                            Text("未檢測到音頻設備")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .padding(.top, 5)
+                                        }
+                                    } else {
+                                        Text(audioTranscriber.transcript)
+                                            .onTapGesture {
+                                                copyToClipboard(audioTranscriber.transcript)
+                                            }
+                                            .contextMenu {
+                                                Button("复制到剪贴板") {
+                                                    copyToClipboard(audioTranscriber.transcript)
+                                                }
+                                            }
                                     }
                                 }
+                                .opacity(showTutorialView ? 0 : 1) // 当教程显示时隐藏内容
+                            }
                         }
                     }
                     .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .opacity(showTutorialView ? 0 : 1) // 当教程显示时隐藏内容
                     .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏内容
                 }
                 
@@ -186,15 +244,16 @@ struct MainView: View {
                 Spacer()
                 
                 // 根据状态显示不同的按钮
-                if !hasCheckedModelStatus {
-                    // 还未检查模型状态，不显示任何按钮
+                if !hasCheckedModelStatus || isCheckingMicrophonePermission {
+                    // 还未检查模型状态或正在检查麦克风权限，不显示任何按钮
                     EmptyView()
+                    .opacity(showTutorialView ? 0 : 1) // 当教程显示时隐藏内容
                 } else if !hasMicrophonePermission {
                     // 请求麦克风权限按钮
                     Button(action: {
                         requestMicrophonePermission()
                     }) {
-                        Text("获取麦克风权限")
+                        Text("獲取麥克風權限")
                             .padding()
                             .background(Color.blue)
                             .foregroundColor(.white)
@@ -202,7 +261,18 @@ struct MainView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .padding()
-                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏按钮
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏按钮
+                } else if !hasAudioInputDevices {
+                    // 没有音频输入设备，显示提示信息
+                    VStack(spacing: 10) {
+                        Text("未檢測到音頻輸入設備")
+                            .font(.headline)
+                        Text("請連接麥克風或其他音頻輸入設備")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏内容
                 } else {
                     // 录音按钮
                     HStack {
@@ -227,9 +297,9 @@ struct MainView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         .padding()
-                        .disabled(isModelDownloading) // 下载期间禁用录音按钮
+                        .disabled(isModelDownloading || showTutorialView) // 下载期间或教程显示时禁用录音按钮
                     }
-                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏按钮
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏按钮
                 }
             }
             .frame(width: 400, height: 300) // 增大窗口尺寸
@@ -245,11 +315,47 @@ struct MainView: View {
                     checkModelStatus()
                 }
             }
+            
+            // 教程视图 - 居中显示
+            if showTutorialView {
+                TutorialView(
+                    isPresented: $showTutorialView,
+                    onTutorialCompleted: {
+                        // 教程完成时检查麦克风权限
+                        checkMicrophonePermission()
+                    }
+                )
+                .transition(.move(edge: .leading))
+                .frame(width: 400, height: 300)
+            }
         }
         .frame(width: 400, height: 300) // 增大窗口尺寸
         .onAppear {
+            // 检查是否需要显示教程
+            let hasCompletedTutorial = UserDefaults.standard.bool(forKey: "HasCompletedTutorial")
+            if !hasCompletedTutorial {
+                // 延迟显示教程，确保UI已完全加载
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showTutorialView = true
+                }
+            }
+            
+            // 每次启动时检查麦克风权限状态
             checkMicrophonePermission()
             audioTranscriber.getAvailableAudioDevices()
+            
+            // 检查是否有音頻輸入設備
+            hasAudioInputDevices = audioTranscriber.hasAvailableAudioInputDevices()
+            
+            // 註冊音頻設備變化通知
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("AudioDevicesChanged"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                // 重新檢查音頻輸入設備
+                self.hasAudioInputDevices = self.audioTranscriber.hasAvailableAudioInputDevices()
+            }
             
             // 從 UserDefaults 加載保存的設置
             if let savedModel = UserDefaults.standard.string(forKey: "SelectedModel") {
@@ -270,8 +376,18 @@ struct MainView: View {
                     selectedModel = savedModel
                 }
                 
-                // 重新檢查模型是否已下載
-                checkModelStatus()
+                // 重新檢查模型是否已下載（但不自动下载）
+                let isDownloaded = self.audioTranscriber.isModelAlreadyDownloaded(model: self.selectedModel.lowercased())
+                self.modelDownloaded = isDownloaded
+                self.hasCheckedModelStatus = true
+                print("模型已更改，检查模型下载状态: \(isDownloaded) for model: \(self.selectedModel.lowercased())")
+                
+                if isDownloaded {
+                    // 如果模型已下载，预加载WhisperKit
+                    Task {
+                        await self.audioTranscriber.preloadWhisperKit()
+                    }
+                }
             }
             
             // 註冊模型下載請求通知
@@ -284,6 +400,27 @@ struct MainView: View {
                     // 开始下载模型
                     downloadModel(model: model)
                 }
+            }
+            
+            // 註冊模型下載開始通知
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ModelDownloadStarted"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                // 激活应用并防止隐藏
+                NSApp.activate(ignoringOtherApps: true)
+                print("模型下载开始，应用已激活")
+            }
+            
+            // 註冊模型下載完成通知
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ModelDownloadFinished"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                // 下载完成后恢复正常行为
+                print("模型下载完成")
             }
             
             // 延遲設置設備選擇，確保音頻設備已加載
@@ -303,26 +440,36 @@ struct MainView: View {
     
     // 检查麦克风权限
     private func checkMicrophonePermission() {
+        // 设置正在检查权限的状态
+        isCheckingMicrophonePermission = true
+        
         // 请求权限以检查状态
         AVAudioApplication.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 hasMicrophonePermission = granted
+                isCheckingMicrophonePermission = false // 检查完成后更新状态
+                hasRequestedMicrophonePermission = true // 标记已经请求过权限
             }
         }
     }
     
     // 请求麦克风权限
     private func requestMicrophonePermission() {
+        // 设置正在检查权限的状态
+        isCheckingMicrophonePermission = true
+        hasRequestedMicrophonePermission = true // 标记已经请求过权限
+        
         AVAudioApplication.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 hasMicrophonePermission = granted
+                isCheckingMicrophonePermission = false // 请求完成后更新状态
+                
                 if !granted {
                     // 显示系统设置提示
                     let alert = NSAlert()
-                    alert.messageText = "需要麦克风权限"
-                    alert.informativeText = "请在系统设置中允许此应用访问麦克风。"
-                    alert.alertStyle = .informational
-                    alert.addButton(withTitle: "打开设置")
+                    alert.messageText = "需要麥克風權限"
+                    alert.informativeText = "請在系統設置中允許此應用訪問麥克風。"
+                    alert.addButton(withTitle: "打開設置")
                     alert.addButton(withTitle: "取消")
                     
                     if alert.runModal() == .alertFirstButtonReturn {
@@ -343,6 +490,7 @@ struct MainView: View {
         
         // 如果模型未下载，自动开始下载
         if !isDownloaded {
+            print("模型 \(selectedModel) 未下载，准备开始下载...")
             downloadModel(model: selectedModel)
         }
         
@@ -389,6 +537,12 @@ struct MainView: View {
     
     // 下载指定模型
     private func downloadModel(model: String) {
+        // 防止重复下载
+        if isDownloadingModel {
+            print("模型 \(model) 正在下载中，跳过重复下载请求")
+            return
+        }
+        
         // 设置要下载的模型
         audioTranscriber.setModel(model)
         
@@ -399,13 +553,22 @@ struct MainView: View {
         
         // 开始下载并显示进度
         isModelDownloading = true
+        isDownloadingModel = true
+        
+        // 激活应用以防止在下载期间被隐藏
+        NSApp.activate(ignoringOtherApps: true)
         
         Task {
             let success = await audioTranscriber.checkAndDownloadModelIfNeeded()
             DispatchQueue.main.async {
                 isModelDownloading = false
+                isDownloadingModel = false
                 modelDownloaded = success
                 if success {
+                    // 下载成功后预加载WhisperKit
+                    Task {
+                        await audioTranscriber.preloadWhisperKit()
+                    }
                     // 发送通知更新UI
                     NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
                 }
@@ -419,11 +582,25 @@ struct MainView: View {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         
-        // 显示一个简短的通知，告知用户文本已复制
-        let notification = NSUserNotification()
-        notification.title = "已复制"
-        notification.informativeText = "文本已复制到剪贴板"
-        NSUserNotificationCenter.default.deliver(notification)
+        // 请求通知权限
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if granted {
+                // 创建并发送通知
+                let content = UNMutableNotificationContent()
+                content.title = "已複製"
+                content.body = "文本已複製到剪貼板"
+                content.sound = .default
+                
+                let request = UNNotificationRequest(identifier: "CopyToClipboard", content: content, trigger: nil)
+                UNUserNotificationCenter.current().add(request) { error in
+                    if let error = error {
+                        print("通知发送失败: \(error)")
+                    }
+                }
+            } else if let error = error {
+                print("通知权限被拒绝: \(error)")
+            }
+        }
     }
 }
 

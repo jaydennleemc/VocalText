@@ -15,17 +15,19 @@ class AudioTranscriber: NSObject, ObservableObject {
     private var audioEngine: AVAudioEngine?
     private var audioFile: AVAudioFile?
     private var whisperKit: WhisperKit?
-    private var currentModel: String = "small" // 默认模型
+    private var currentModel: String = "tiny" // 默认模型
     private var modelDownloaded: Bool = false // 标记模型是否已下载
     private var audioData: Data = Data() // 用于存储录音数据
     private var audioFormat: AVAudioFormat? // 存储音频格式信息
     private var selectedDeviceID: AudioDeviceID? // 存储选择的音频设备ID
+    private var deviceMonitoringTimer: Timer? // 用于存储设备监控定时器
     
     @Published var isRecording = false
-    @Published var transcript = "点击开始录音..."
+    @Published var isTranscribing = false // 添加转录状态
+    @Published var transcript = "點擊開始錄音..."
     @Published var isDownloading = false
     @Published var downloadProgress: Double = 0.0
-    @Published var downloadStatus = "准备下载模型..."
+    @Published var downloadStatus = "準備下載模型..."
     @Published var volumeLevel: Double = 0.0 // 添加音量级别属性
     
     // 音频设备相关属性
@@ -39,12 +41,45 @@ class AudioTranscriber: NSObject, ObservableObject {
     
     override init() {
         super.init()
-        // macOS不需要设置音频会话
+        // macOS上也需要正确配置AVAudioSession以避免HALC错误
+        setupAudioSession()
+        // 开始监听音频设备变化
+        startMonitoringAudioDevices()
+    }
+    
+    private func setupAudioSession() {
+        // 在macOS上，正确配置AVAudioSession以避免HALC错误
+        #if os(iOS)
+        do {
+            let session = AVAudioSession.sharedInstance()
+            // 在iOS上使用playAndRecord类别以支持录音和播放
+            try session.setCategory(.playAndRecord, mode: .default)
+            try session.setActive(true, options: [.notifyOthersOnDeactivation])
+            print("音頻會話設置完成")
+        } catch {
+            print("音頻會話設置失敗: \(error)")
+        }
+        #endif
+        // macOS上不需要特别配置AVAudioSession
+        print("音頻會話設置完成")
+    }
+    
+    // 监听音频设备变化
+    private func startMonitoringAudioDevices() {
+        // 使用定时器定期检查设备变化
+        deviceMonitoringTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            DispatchQueue.main.async {
+                self.getAvailableAudioDevices()
+            }
+        }
+        
+        // 初始获取设备列表
+        getAvailableAudioDevices()
     }
     
     func setModel(_ model: String) {
         currentModel = model.lowercased()
-        print("模型已设置为: \(currentModel)")
+        print("模型已設置為: \(currentModel)")
     }
     
     func isModelAlreadyDownloaded(model: String) -> Bool {
@@ -64,7 +99,7 @@ class AudioTranscriber: NSObject, ObservableObject {
                     return false
                 }
             }
-            print("模型 \(model) 已完整下载")
+            print("模型 \(model) 已完整下載")
             return true
         }
         
@@ -80,7 +115,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         // 获取模型路径
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
         let modelPath = "\(documentsPath)/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-\(model)"
-        print("检查模型路径: \(modelPath)")
+        print("檢查模型路徑: \(modelPath)")
         return modelPath
     }
     
@@ -93,18 +128,21 @@ class AudioTranscriber: NSObject, ObservableObject {
         
         do {
             isDownloading = true
-            downloadStatus = "正在检查 \(currentModel) 模型..."
+            downloadStatus = "正在檢查 \(currentModel) 模型..."
             downloadProgress = 0.0
+            
+            // 发送开始下载通知
+            NotificationCenter.default.post(name: Notification.Name("ModelDownloadStarted"), object: nil)
             
             // 使用WhisperKit的模型下载功能
             let progressHandler: (Progress) -> Void = { progress in
                 DispatchQueue.main.async {
                     self.downloadProgress = progress.fractionCompleted
-                    self.downloadStatus = "正在下载 \(self.currentModel) 模型... \(Int(progress.fractionCompleted * 100))%"
+                    self.downloadStatus = "正在下載 \(self.currentModel) 模型... \(Int(progress.fractionCompleted * 100))%"
                 }
             }
             
-            downloadStatus = "正在下载 \(currentModel) 模型..."
+            downloadStatus = "正在下載 \(currentModel) 模型..."
             
             // 下载模型
             _ = try await WhisperKit.download(
@@ -113,48 +151,67 @@ class AudioTranscriber: NSObject, ObservableObject {
             )
             
             isDownloading = false
-            downloadStatus = "模型下载完成"
+            downloadStatus = "模型下載完成"
             modelDownloaded = true // 标记模型已下载
             
+            // 发送下载完成通知
+            NotificationCenter.default.post(name: Notification.Name("ModelDownloadFinished"), object: nil)
+            
             // 添加调试日志
-            print("模型下载完成，modelDownloaded = \(modelDownloaded)")
+            print("模型下載完成，modelDownloaded = \(modelDownloaded)")
             return true
         } catch let error as NSError {
-            print("模型下载失败: \(error)")
+            print("模型下載失敗: \(error)")
             isDownloading = false
-            downloadStatus = "模型下载失败: \(error.localizedDescription)"
+            downloadStatus = "模型下載失敗: \(error.localizedDescription)"
             modelDownloaded = false // 确保标记为未下载
+            
+            // 发送下载完成通知（即使是失败的情况）
+            NotificationCenter.default.post(name: Notification.Name("ModelDownloadFinished"), object: nil)
             
             // 提供更详细的错误信息
             if error.domain == NSURLErrorDomain {
                 switch error.code {
                 case NSURLErrorNotConnectedToInternet:
-                    downloadStatus = "模型下载失败: 无网络连接"
+                    downloadStatus = "模型下載失敗: 無網絡連接"
                 case NSURLErrorTimedOut:
-                    downloadStatus = "模型下载失败: 连接超时"
+                    downloadStatus = "模型下載失敗: 連接超時"
                 case NSURLErrorCannotFindHost:
-                    downloadStatus = "模型下载失败: 无法找到服务器"
+                    downloadStatus = "模型下載失敗: 無法找到服務器"
                 default:
-                    downloadStatus = "模型下载失败: 网络错误 (\(error.localizedDescription))"
+                    downloadStatus = "模型下載失敗: 網絡錯誤 (\(error.localizedDescription))"
                 }
             } else {
-                downloadStatus = "模型下载失败: \(error.localizedDescription)"
+                downloadStatus = "模型下載失敗: \(error.localizedDescription)"
             }
             
             return false
         } catch {
-            print("模型下载失败: \(error)")
+            print("模型下載失敗: \(error)")
             isDownloading = false
-            downloadStatus = "模型下载失败: 未知错误"
+            downloadStatus = "模型下載失敗: 未知錯誤"
             modelDownloaded = false // 确保标记为未下载
+            
+            // 发送下载完成通知（即使是失败的情况）
+            NotificationCenter.default.post(name: Notification.Name("ModelDownloadFinished"), object: nil)
+            
             return false
         }
     }
     
     func startRecording() {
+        // 检查是否有音频输入设备
+        if !hasAvailableAudioInputDevices() {
+            transcript = "未檢測到音頻輸入設備，請連接麥克風或其他音頻輸入設備"
+            return
+        }
+        
         isRecording = true
-        transcript = "正在录音..."
+        transcript = "正在錄音..."
         audioData = Data() // 重置音频数据
+        
+        // 发送录音开始通知
+        NotificationCenter.default.post(name: Notification.Name("RecordingStarted"), object: nil)
         
         // 检查麦克风权限
         AVAudioApplication.requestRecordPermission { [weak self] granted in
@@ -165,8 +222,10 @@ class AudioTranscriber: NSObject, ObservableObject {
                     
                     // 检查模型是否已下载（重新检查以确保状态正确）
                     if !self.isModelAlreadyDownloaded() {
-                        self.transcript = "模型未下载，请先下载模型"
+                        self.transcript = "模型未下載，請先下載模型"
                         self.isRecording = false
+                        // 发送录音停止通知
+                        NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
                         return
                     }
                     
@@ -180,8 +239,10 @@ class AudioTranscriber: NSObject, ObservableObject {
                         }
                     }
                 } else {
-                    self?.transcript = "麦克风权限被拒绝"
+                    self?.transcript = "麥克風權限被拒絕"
                     self?.isRecording = false
+                    // 发送录音停止通知
+                    NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
                 }
             }
         }
@@ -192,12 +253,12 @@ class AudioTranscriber: NSObject, ObservableObject {
     
     func setLanguage(_ language: String) {
         selectedLanguage = language
-        print("语言已设置为: \(selectedLanguage)")
+        print("語言已設置為: \(selectedLanguage)")
         
         // 添加调试信息，查看 WhisperKit 是否支持语言设置
         if let whisperKit = whisperKit {
             // 尝试查看 whisperKit 是否有语言相关的属性或方法
-            print("WhisperKit 实例: \(whisperKit)")
+            print("WhisperKit 實例: \(whisperKit)")
         }
     }
     
@@ -207,7 +268,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         guard !isWhisperKitPreloading && whisperKit == nil else { return }
         
         isWhisperKitPreloading = true
-        print("开始预加载WhisperKit...")
+        print("開始預加載WhisperKit...")
         
         do {
             // 根据选择的模型初始化WhisperKit
@@ -217,10 +278,10 @@ class AudioTranscriber: NSObject, ObservableObject {
             await MainActor.run {
                 self.whisperKit = loadedWhisperKit
                 self.isWhisperKitPreloading = false
-                print("WhisperKit 预加载完成")
+                print("WhisperKit 預加載完成")
             }
         } catch {
-            print("WhisperKit 预加载失败: \(error)")
+            print("WhisperKit 預加載失敗: \(error)")
             await MainActor.run {
                 self.isWhisperKitPreloading = false
             }
@@ -252,57 +313,56 @@ class AudioTranscriber: NSObject, ObservableObject {
                 self.startAudioEngine()
             }
         } catch {
-            print("WhisperKit 初始化失败: \(error)")
+            print("WhisperKit 初始化失敗: \(error)")
             await MainActor.run {
-                self.transcript = "模型加载失败: \(error.localizedDescription)"
+                self.transcript = "模型加載失敗: \(error.localizedDescription)"
                 self.isRecording = false
             }
         }
     }
     
     private func startAudioEngine() {
+        // 如果音频引擎已经在运行，先停止它
+        if let existingEngine = audioEngine, existingEngine.isRunning {
+            existingEngine.stop()
+            // 移除所有tap
+            if existingEngine.inputNode.numberOfInputs > 0 {
+                existingEngine.inputNode.removeTap(onBus: 0)
+            }
+        }
+        
+        // 如果音频引擎已经存在，先重置它
+        if audioEngine != nil {
+            audioEngine = nil
+        }
+        
         // 设置音频引擎
         audioEngine = AVAudioEngine()
         
         guard let audioEngine = audioEngine else { 
-            transcript = "音频引擎初始化失败"
+            transcript = "音頻引擎初始化失敗"
             isRecording = false
             return
         }
         
         // 获取输入节点
-        let inputNode: AVAudioInputNode
-        if let deviceID = selectedDeviceID {
-            // 如果选择了特定设备，尝试使用它
-            // 注意：AVAudioEngine 不直接支持选择特定的输入设备
-            // 我们需要通过 AVAudioSession (在 iOS 中) 或 CoreAudio (在 macOS 中) 来实现
-            // 这里我们仍然使用默认输入节点，但会在日志中记录选择的设备
-            print("尝试使用音频设备: \(deviceID)")
-            inputNode = audioEngine.inputNode
-        } else {
-            // 使用默认输入节点
-            inputNode = audioEngine.inputNode
-        }
-        
+        let inputNode = audioEngine.inputNode
         let bus = 0
         
         // 使用输入节点的输出格式，避免格式不匹配
         let inputFormat = inputNode.outputFormat(forBus: bus)
         audioFormat = inputFormat // 保存音频格式
         
-        print("音频格式: \(inputFormat)")
-        print("采样率: \(inputFormat.sampleRate)")
-        print("声道数: \(inputFormat.channelCount)")
+        print("音頻格式: \(inputFormat)")
+        print("採樣率: \(inputFormat.sampleRate)")
+        print("聲道數: \(inputFormat.channelCount)")
         print("位深度: \(inputFormat.settings[AVLinearPCMBitDepthKey] ?? "Unknown")")
         
         // 重置音频数据
         audioData = Data()
         
-        // 创建一个与输入格式匹配的格式用于安装tap
-        let tapFormat = inputFormat
-        
         // 安装抽头以捕获音频数据
-        inputNode.installTap(onBus: bus, bufferSize: 1024, format: tapFormat) { [weak self] buffer, time in
+        inputNode.installTap(onBus: bus, bufferSize: 1024, format: inputFormat) { [weak self] buffer, time in
             guard let self = self else { return }
             
             // 将音频数据转换为Data并追加
@@ -314,15 +374,14 @@ class AudioTranscriber: NSObject, ObservableObject {
             
             // 打印调试信息
             DispatchQueue.main.async {
-                print("接收到音频数据: \(buffer.frameLength) 帧, 音量: \(volume)")
-                print("缓冲区大小: \(buffer.frameCapacity)")
+                print("接收到音頻數據: \(buffer.frameLength) 幀, 音量: \(volume)")
                 self.volumeLevel = volume // 更新音量级别
             }
             
             // 获取音频数据
             if let audioData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
                 DispatchQueue.main.async {
-                    print("音频数据大小: \(audioData.count) 字节")
+                    print("音頻數據大小: \(audioData.count) 字節")
                     self.audioData.append(audioData)
                 }
             } else {
@@ -332,19 +391,18 @@ class AudioTranscriber: NSObject, ObservableObject {
             }
         }
         
-        // 重要：断开输入节点与主混音器的连接以避免音频反馈（回音）
-        // 只连接输入节点到混音器而不播放，或者完全不连接
-        // 这样可以防止麦克风收录到扬声器播放的声音
+        // 断开输入节点与主混音器的连接以避免音频反馈
+        audioEngine.disconnectNodeInput(audioEngine.mainMixerNode)
         
         do {
-            // 准备音频引擎但不启动混音器连接以避免回音
+            // 准备并启动音频引擎
             audioEngine.prepare()
             try audioEngine.start()
             print("音频录制已开始")
         } catch {
             print("无法启动音频引擎: \(error)")
             isRecording = false
-            transcript = "录音启动失败: \(error.localizedDescription)"
+            transcript = "錄音啟動失敗: \(error.localizedDescription)"
         }
     }
     
@@ -413,8 +471,11 @@ class AudioTranscriber: NSObject, ObservableObject {
     func stopRecording() {
         isRecording = false
         
+        // 发送录音停止通知
+        NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
+        
         guard let audioEngine = audioEngine else { 
-            transcript = "音频引擎未初始化"
+            transcript = "音頻引擎未初始化"
             return 
         }
         
@@ -422,26 +483,27 @@ class AudioTranscriber: NSObject, ObservableObject {
         audioEngine.stop()
         
         // 移除所有tap
-        if audioEngine.inputNode.numberOfInputs > 0 {
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
+        audioEngine.inputNode.removeTap(onBus: 0)
         
-        print("音频录制已停止")
-        print("总音频数据大小: \(audioData.count) 字节")
-        transcript = "录音已停止，正在处理..."
+        // 重置音频引擎
+        self.audioEngine = nil
+        
+        print("音頻錄製已停止")
+        print("總音頻數據大小: \(audioData.count) 字節")
+        transcript = "錄音已停止，正在處理..."
         
         // 只有在有音频数据时才处理
         if !audioData.isEmpty {
             // 处理音频数据
             processAudio()
         } else {
-            transcript = "没有录制到音频数据"
+            transcript = "沒有錄製到音頻數據"
         }
     }
     
     private func processAudio() {
         guard !audioData.isEmpty else {
-            transcript = "没有录制到音频数据"
+            transcript = "沒有錄製到音頻數據"
             return
         }
         
@@ -475,7 +537,7 @@ class AudioTranscriber: NSObject, ObservableObject {
             } catch {
                 print("音频处理失败: \(error)")
                 await MainActor.run {
-                    self.transcript = "音频处理失败: \(error.localizedDescription)"
+                    self.transcript = "音頻處理失敗: \(error.localizedDescription)"
                 }
             }
         }
@@ -638,10 +700,26 @@ class AudioTranscriber: NSObject, ObservableObject {
     }
     
     func transcribeAudio(audioFilePath: String) async {
+        // 设置转录状态为进行中
+        await MainActor.run {
+            self.isTranscribing = true
+            // 发送转录开始通知
+            NotificationCenter.default.post(name: Notification.Name("TranscribingStarted"), object: nil)
+        }
+        
+        defer {
+            // 确保在方法结束时将转录状态设为false
+            Task { @MainActor in
+                self.isTranscribing = false
+                // 发送转录结束通知
+                NotificationCenter.default.post(name: Notification.Name("TranscribingStopped"), object: nil)
+            }
+        }
+        
         guard let whisperKit = whisperKit else {
             print("WhisperKit 未初始化")
             await MainActor.run {
-                self.transcript = "模型未正确加载，请重新下载模型"
+                self.transcript = "模型未正確加載，請重新下載模型"
             }
             return
         }
@@ -650,7 +728,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         if !FileManager.default.fileExists(atPath: audioFilePath) {
             print("音频文件不存在: \(audioFilePath)")
             await MainActor.run {
-                self.transcript = "音频文件不存在"
+                self.transcript = "音頻文件不存在"
             }
             return
         }
@@ -659,20 +737,20 @@ class AudioTranscriber: NSObject, ObservableObject {
         do {
             let fileAttributes = try FileManager.default.attributesOfItem(atPath: audioFilePath)
             if let fileSize = fileAttributes[.size] as? NSNumber {
-                print("转录文件大小: \(fileSize) 字节")
+                print("轉錄文件大小: \(fileSize) 字節")
                 if fileSize.intValue == 0 {
                     await MainActor.run {
-                        self.transcript = "音频文件为空"
+                        self.transcript = "音頻文件為空"
                     }
                     return
                 }
             }
         } catch {
-            print("无法获取文件信息: \(error)")
+            print("無法獲取文件信息: \(error)")
         }
         
         do {
-            print("开始转录音频文件: \(audioFilePath)")
+            print("開始轉錄音頻文件: \(audioFilePath)")
             
             // 使用 DecodingOptions 配置语言
             let decodingOptions = DecodingOptions(
@@ -681,7 +759,7 @@ class AudioTranscriber: NSObject, ObservableObject {
                 sampleLength: 224
             )
             
-            print("使用语言: \(selectedLanguage)")
+            print("使用語言: \(selectedLanguage)")
             
             // 调用 transcribe 方法并传入解码选项
             let result = try await whisperKit.transcribe(
@@ -689,39 +767,39 @@ class AudioTranscriber: NSObject, ObservableObject {
                 decodeOptions: decodingOptions
             )
             
-            print("转录完成")
+            print("轉錄完成")
             
             await MainActor.run {
                 // 处理转录结果
-                var extractedText = "转录结果为空"
+                var extractedText = "轉錄結果為空"
                 
                 if let results = result as? [TranscriptionResult] {
                     // 如果是TranscriptionResult数组
                     if let firstResult = results.first {
-                        extractedText = firstResult.text ?? "转录结果为空"
+                        extractedText = firstResult.text ?? "轉錄結果為空"
                     }
                 } else if let textResults = result as? [String] {
                     // 如果是字符串数组
                     if let firstText = textResults.first {
-                        extractedText = firstText.isEmpty ? "转录结果为空" : firstText
+                        extractedText = firstText.isEmpty ? "轉錄結果為空" : firstText
                     }
                 } else if let singleText = result as? String {
                     // 如果是单个字符串
-                    extractedText = singleText.isEmpty ? "转录结果为空" : singleText
+                    extractedText = singleText.isEmpty ? "轉錄結果為空" : singleText
                 } else {
                     // 尝试获取text属性
                     if let text = (result as? NSObject)?.value(forKey: "text") as? String {
-                        extractedText = text.isEmpty ? "转录结果为空" : text
+                        extractedText = text.isEmpty ? "轉錄結果為空" : text
                     }
                 }
                 
                 self.transcript = extractedText
-                print("转录结果: \(extractedText)")
+                print("轉錄結果: \(extractedText)")
             }
         } catch {
             print("转录失败: \(error)")
             await MainActor.run {
-                self.transcript = "转录失败: \(error.localizedDescription)"
+                self.transcript = "轉錄失敗: \(error.localizedDescription)"
             }
         }
     }
@@ -732,48 +810,36 @@ class AudioTranscriber: NSObject, ObservableObject {
         let name: String
     }
     
-    // 获取可用的音频输入设备
-    func getAvailableAudioDevices() {
-        var devices: [AudioDevice] = []
-        
-        // 获取默认输入设备
-        var defaultDeviceID = AudioDeviceID(0)
-        var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        let status = AudioObjectGetPropertyData(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            0,
-            nil,
-            &propertySize,
-            &defaultDeviceID
-        )
-        
-        if status == noErr {
-            let deviceName = getDeviceName(deviceID: defaultDeviceID)
-            devices.append(AudioDevice(id: defaultDeviceID, name: "默认设备: \(deviceName)"))
+    // 检查是否有可用的音频输入设备
+    func hasAvailableAudioInputDevices() -> Bool {
+        let devices = getAvailableAudioDevicesSync()
+        // 过滤掉"未知设备"等无效设备
+        let validDevices = devices.filter { device in
+            return device.name != "未知设备" && !device.name.isEmpty
         }
+        return !validDevices.isEmpty
+    }
+    
+    // 同步获取可用的音频输入设备
+    private func getAvailableAudioDevicesSync() -> [AudioDevice] {
+        var devices: [AudioDevice] = []
         
         // 获取所有音频设备
         var deviceCount = UInt32(0)
-        address = AudioObjectPropertyAddress(
+        var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         
-        propertySize = 0
-        var status2 = AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize)
-        if status2 != noErr { return }
+        var propertySize = UInt32(0)
+        var status = AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize)
+        if status != noErr { return devices }
         
         deviceCount = propertySize / UInt32(MemoryLayout<AudioDeviceID>.size)
         var deviceIDs = [AudioDeviceID](repeating: 0, count: Int(deviceCount))
-        status2 = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize, &deviceIDs)
-        if status2 != noErr { return }
+        status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize, &deviceIDs)
+        if status != noErr { return devices }
         
         // 过滤出输入设备
         for deviceID in deviceIDs {
@@ -785,18 +851,34 @@ class AudioTranscriber: NSObject, ObservableObject {
             )
             
             propertySize = 0
-            status2 = AudioObjectGetPropertyDataSize(deviceID, &streamAddress, 0, nil, &propertySize)
-            if status2 != noErr { continue }
+            status = AudioObjectGetPropertyDataSize(deviceID, &streamAddress, 0, nil, &propertySize)
+            if status != noErr { continue }
             
             streamCount = propertySize / UInt32(MemoryLayout<AudioObjectID>.size)
             if streamCount > 0 {
                 let deviceName = getDeviceName(deviceID: deviceID)
-                devices.append(AudioDevice(id: deviceID, name: deviceName))
+                // 只添加有效的设备（不是"未知设备"且名称不为空）
+                if deviceName != "未知设备" && !deviceName.isEmpty {
+                    devices.append(AudioDevice(id: deviceID, name: deviceName))
+                }
             }
         }
         
+        return devices
+    }
+    
+    // 获取可用的音频输入设备
+    func getAvailableAudioDevices() {
+        let devices = getAvailableAudioDevicesSync()
+        
         DispatchQueue.main.async {
+            let oldDeviceCount = self.audioDevices.count
             self.audioDevices = devices
+            
+            // 如果设备数量发生变化，发送通知
+            if oldDeviceCount != devices.count {
+                NotificationCenter.default.post(name: Notification.Name("AudioDevicesChanged"), object: nil)
+            }
         }
     }
     
@@ -835,5 +917,11 @@ class AudioTranscriber: NSObject, ObservableObject {
         selectedDeviceID = audioDevices[index].id
         print("已选择设备索引: \(index), 设备ID: \(audioDevices[index].id), 设备名称: \(audioDevices[index].name)")
         UserDefaults.standard.set(index, forKey: "SelectedDeviceIndex")
+    }
+    
+    // 移除监听器
+    deinit {
+        deviceMonitoringTimer?.invalidate()
+        deviceMonitoringTimer = nil
     }
 }

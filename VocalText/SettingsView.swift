@@ -45,7 +45,7 @@ struct SettingsView: View {
     var body: some View {
         VStack {
             HStack {
-                Text("设置")
+                Text("設置")
                     .font(.headline)
                 Spacer()
                 Button(action: {
@@ -66,7 +66,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("模型选择")
+                            Text("模型選擇")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             
@@ -75,11 +75,11 @@ struct SettingsView: View {
                                     HStack {
                                         Text(model)
                                         if audioTranscriber.isModelAlreadyDownloaded(model: model) {
-                                            Text("(已下载)")
+                                            Text("(已下載)")
                                                 .foregroundColor(.green)
                                                 .font(.caption)
                                         } else {
-                                            Text("(需要下载)")
+                                            Text("(需要下載)")
                                                 .foregroundColor(.red)
                                                 .font(.caption)
                                         }
@@ -94,24 +94,30 @@ struct SettingsView: View {
                         Divider()
                         
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("音频输入设备")
+                            Text("音頻輸入設備")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             
-                            Picker("", selection: $selectedDeviceIndex) {
-                                ForEach(0..<audioTranscriber.audioDevices.count, id: \.self) { index in
-                                    Text(audioTranscriber.audioDevices[index].name).tag(index)
+                            if audioTranscriber.audioDevices.isEmpty {
+                                Text("沒有可用的音頻輸入設備，請連接麥克風或其他音頻輸入設備")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            } else {
+                                Picker("", selection: $selectedDeviceIndex) {
+                                    ForEach(0..<audioTranscriber.audioDevices.count, id: \.self) { index in
+                                        Text(audioTranscriber.audioDevices[index].name).tag(index)
+                                    }
                                 }
+                                .pickerStyle(MenuPickerStyle())
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .pickerStyle(MenuPickerStyle())
-                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         
                         Divider()
                         
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("语言设置")
+                            Text("語言設置")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             

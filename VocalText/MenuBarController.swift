@@ -5,84 +5,74 @@
 //  Created by LEEJAYMC on 16/9/2025.
 //
 
-import AppKit
+import Cocoa
 import SwiftUI
 
-class MenuBarController: NSObject, NSMenuDelegate {
+class MenuBarController: NSObject {
     private var statusItem: NSStatusItem!
-    private var popover = NSPopover()
+    private var popover: NSPopover!
+    private var mainView: MainView!
     
     override init() {
         super.init()
-        setupStatusBarItem()
+        setupMenuBar()
     }
     
-    private func setupStatusBarItem() {
-        // 创建状态栏项
+    private func setupMenuBar() {
+        // 创建状态栏项目
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         // 设置状态栏图标
         if let button = statusItem.button {
-            // 使用系统图标
-            button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)
-            button.action = #selector(showPopover(_:))
+            button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "VocalText")
+            button.action = #selector(statusBarButtonClicked)
             button.target = self
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp]) // 监听左右键点击
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+        
+        // 创建弹出窗口
+        popover = NSPopover()
+        mainView = MainView()
+        popover.contentViewController = NSHostingController(rootView: mainView)
+        popover.behavior = .transient
     }
     
-    @objc private func showPopover(_ sender: AnyObject?) {
-        // 检查是左键还是右键点击
+    @objc private func statusBarButtonClicked() {
         let event = NSApp.currentEvent!
+        
         if event.type == .rightMouseUp {
             // 右键点击显示菜单
-            showContextMenu()
-            return
+            setupMenu()
+            statusItem.menu?.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+        } else {
+            // 左键点击显示/隐藏弹出窗口
+            toggleMainWindow()
         }
-        
-        // 如果popover已经显示，则关闭它
-        if popover.isShown {
-            closePopover(sender)
-            return
-        }
-        
-        // 创建主视图
-        let mainView = MainView()
-        let hostingController = NSHostingController(rootView: mainView)
-        
-        // 设置popover内容大小
-        hostingController.view.frame = NSMakeRect(0, 0, 400, 300)
-        
-        // 配置popover
-        popover.contentViewController = hostingController
-        popover.behavior = .applicationDefined // 不会自动关闭，需要手动控制
-        
-        // 显示popover
-        if let button = statusItem.button {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
-        }
-        
-        // 确保popover在应用程序激活时显示
-        NSApp.activate(ignoringOtherApps: true)
     }
     
-    private func showContextMenu() {
+    private func setupMenu() {
         let menu = NSMenu()
         
-        let quitItem = NSMenuItem(title: "退出", action: #selector(quitApp(_:)), keyEquivalent: "q")
+        // 添加退出选项
+        let quitItem = NSMenuItem(title: "退出", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         
         statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil // 重置菜单以恢复popover功能
     }
     
-    private func closePopover(_ sender: AnyObject?) {
-        popover.performClose(sender)
+    @objc private func toggleMainWindow() {
+        // 切换主窗口的显示/隐藏
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            if let button = statusItem.button {
+                popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
+            }
+        }
     }
     
-    @objc private func quitApp(_ sender: Any?) {
-        NSApp.terminate(sender)
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
     }
 }
