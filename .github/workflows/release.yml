@@ -59,11 +59,8 @@ jobs:
     
     - name: Create ZIP archive
       run: |
-        zip -r "build-artifacts/VocalText-${{ env.APP_VERSION }}.zip" "build-artifacts/VocalText.app"
-
-    - name: Archive build artifacts
-      run: |
-        tar -cJf build-artifacts/VocalText-macOS-${{ env.APP_VERSION }}.tar.xz -C build-artifacts VocalText.app
+        cd build-artifacts
+        zip -r "VocalText-${{ env.APP_VERSION }}.zip" "VocalText.app"
     
     - name: Create Release
       uses: actions/create-release@v1

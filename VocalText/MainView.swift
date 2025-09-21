@@ -285,18 +285,24 @@ struct MainView: View {
                     // 录音按钮
                     HStack {
                         Button(action: {
-                            isRecording.toggle()
-                            if isRecording {
-                                // 設置模型並開始錄音
-                                audioTranscriber.setModel(selectedModel)
-                                // 设置语言
-                                if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
-                                    audioTranscriber.setLanguage(savedLanguage)
+                            // 只有在有麦克风权限的情况下才开始录音
+                            if hasMicrophonePermission {
+                                isRecording.toggle()
+                                if isRecording {
+                                    // 設置模型並開始錄音
+                                    audioTranscriber.setModel(selectedModel)
+                                    // 设置语言
+                                    if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+                                        audioTranscriber.setLanguage(savedLanguage)
+                                    }
+                                    // 直接开始录音，模型检查在AudioTranscriber内部处理
+                                    audioTranscriber.startRecording()
+                                } else {
+                                    audioTranscriber.stopRecording()
                                 }
-                                // 直接开始录音，模型检查在AudioTranscriber内部处理
-                                audioTranscriber.startRecording()
                             } else {
-                                audioTranscriber.stopRecording()
+                                // 如果没有麦克风权限，请求权限
+                                requestMicrophonePermission()
                             }
                         }) {
                             Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")

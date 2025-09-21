@@ -52,16 +52,11 @@ jobs:
     
     - name: Create ZIP archive
       run: |
-        zip -r "build-artifacts/VocalText-${{ env.APP_VERSION }}.zip" "build-artifacts/VocalText.app"
+        cd build-artifacts
+        zip -r "VocalText-${{ env.APP_VERSION }}.zip" "VocalText.app"
     
     - name: Upload ZIP as artifact
       uses: actions/upload-artifact@v4
       with:
         name: VocalText-${{ env.APP_VERSION }}.zip
         path: build-artifacts/VocalText-${{ env.APP_VERSION }}.zip
-    
-    - name: Upload app bundle as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: VocalText-${{ env.APP_VERSION }}.tar.xz
-        path: build-artifacts/VocalText-macOS-${{ env.APP_VERSION }}.tar.xz

@@ -223,37 +223,23 @@ class AudioTranscriber: NSObject, ObservableObject {
         // 发送录音开始通知
         NotificationCenter.default.post(name: Notification.Name("RecordingStarted"), object: nil)
         
-        // 检查麦克风权限
-        AVAudioApplication.requestRecordPermission { [weak self] granted in
-            DispatchQueue.main.async {
-                if granted {
-                    // 先检查模型是否已下载
-                    guard let self = self else { return }
-                    
-                    // 检查模型是否已下载（重新检查以确保状态正确）
-                    if !self.isModelAlreadyDownloaded() {
-                        self.transcript = "模型未下載，請先下載模型"
-                        self.isRecording = false
-                        // 发送录音停止通知
-                        NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
-                        return
-                    }
-                    
-                    // 如果WhisperKit已经初始化，直接开始录音
-                    if self.whisperKit != nil {
-                        self.startAudioEngine()
-                    } else {
-                        // 初始化WhisperKit然后开始录音
-                        Task {
-                            await self.initializeWhisperKitAndStartRecording()
-                        }
-                    }
-                } else {
-                    self?.transcript = "麥克風權限被拒絕"
-                    self?.isRecording = false
-                    // 发送录音停止通知
-                    NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
-                }
+        // 直接开始录音，权限检查应该在调用此方法之前完成
+        // 先检查模型是否已下载
+        if !self.isModelAlreadyDownloaded() {
+            self.transcript = "模型未下載，請先下載模型"
+            self.isRecording = false
+            // 发送录音停止通知
+            NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
+            return
+        }
+        
+        // 如果WhisperKit已经初始化，直接开始录音
+        if self.whisperKit != nil {
+            self.startAudioEngine()
+        } else {
+            // 初始化WhisperKit然后开始录音
+            Task {
+                await self.initializeWhisperKitAndStartRecording()
             }
         }
     }
