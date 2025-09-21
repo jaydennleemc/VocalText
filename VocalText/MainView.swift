@@ -335,8 +335,10 @@ struct MainView: View {
                 TutorialView(
                     isPresented: $showTutorialView,
                     onTutorialCompleted: {
-                        // 教程完成时检查麦克风权限
-                        checkMicrophonePermission()
+                        // 只有在还没有检查过麦克风权限时才检查
+                        if !hasRequestedMicrophonePermission {
+                            checkMicrophonePermission()
+                        }
                     }
                 )
                 .transition(.move(edge: .leading))
@@ -354,8 +356,10 @@ struct MainView: View {
                 }
             }
             
-            // 每次启动时检查麦克风权限状态
-            checkMicrophonePermission()
+            // 只有在还没有检查过麦克风权限时才检查
+            if !hasRequestedMicrophonePermission {
+                checkMicrophonePermission()
+            }
             audioTranscriber.getAvailableAudioDevices()
             
             // 检查是否有音頻輸入設備

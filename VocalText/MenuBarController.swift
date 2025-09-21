@@ -66,6 +66,12 @@ class MenuBarController: NSObject {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            // 确保 mainView 已创建
+            if mainView == nil {
+                mainView = MainView()
+                popover.contentViewController = NSHostingController(rootView: mainView)
+            }
+            
             if let button = statusItem.button {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
             }
