@@ -458,6 +458,26 @@ struct MainView: View {
     
     // 检查麦克风权限
     private func checkMicrophonePermission() {
+        // 如果已经请求过权限，直接检查当前状态，不再重复请求
+        if hasRequestedMicrophonePermission {
+            // 直接检查当前权限状态，不弹出权限对话框
+            #if os(macOS)
+            // 在 macOS 上使用 AVAudioApplication 检查权限
+            AVAudioApplication.requestRecordPermission { granted in
+                DispatchQueue.main.async {
+                    self.hasMicrophonePermission = granted
+                    self.isCheckingMicrophonePermission = false
+                }
+            }
+            #else
+            DispatchQueue.main.async {
+                self.hasMicrophonePermission = (AVAudioSession.sharedInstance().recordPermission == .granted)
+                self.isCheckingMicrophonePermission = false
+            }
+            #endif
+            return
+        }
+        
         // 设置正在检查权限的状态
         isCheckingMicrophonePermission = true
         
@@ -473,6 +493,51 @@ struct MainView: View {
     
     // 请求麦克风权限
     private func requestMicrophonePermission() {
+        // 如果已经请求过权限，直接检查当前状态
+        if hasRequestedMicrophonePermission {
+            #if os(macOS)
+            // 在 macOS 上使用 AVAudioApplication 检查权限
+            AVAudioApplication.requestRecordPermission { granted in
+                DispatchQueue.main.async {
+                    self.hasMicrophonePermission = granted
+                    self.isCheckingMicrophonePermission = false
+                    
+                    if !self.hasMicrophonePermission {
+                        // 显示系统设置提示
+                        let alert = NSAlert()
+                        alert.messageText = "需要麥克風權限"
+                        alert.informativeText = "請在系統設置中允許此應用訪問麥克風。"
+                        alert.addButton(withTitle: "打開設置")
+                        alert.addButton(withTitle: "取消")
+                        
+                        if alert.runModal() == .alertFirstButtonReturn {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+                        }
+                    }
+                }
+            }
+            #else
+            DispatchQueue.main.async {
+                self.hasMicrophonePermission = (AVAudioSession.sharedInstance().recordPermission == .granted)
+                self.isCheckingMicrophonePermission = false
+                
+                if !self.hasMicrophonePermission {
+                    // 显示系统设置提示
+                    let alert = NSAlert()
+                    alert.messageText = "需要麥克風權限"
+                    alert.informativeText = "請在系統設置中允許此應用訪問麥克風。"
+                    alert.addButton(withTitle: "打開設置")
+                    alert.addButton(withTitle: "取消")
+                    
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+                    }
+                }
+            }
+            #endif
+            return
+        }
+        
         // 设置正在检查权限的状态
         isCheckingMicrophonePermission = true
         hasRequestedMicrophonePermission = true // 标记已经请求过权限

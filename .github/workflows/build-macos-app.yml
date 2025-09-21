@@ -12,7 +12,7 @@ jobs:
       matrix:
         include:
           - xcode: "26.0"
-            deployment_target: ""
+            deployment_target: "15.5"
     runs-on: macos-26
     
     steps:
@@ -20,28 +20,53 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
+        fetch-depth: 0
     
     - name: Set up Xcode
       run: |
         sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
         xcodebuild -version
         
-    - name: Get app version
+    - name: Cache Swift Package Manager dependencies
+      uses: actions/cache@v4
+      with:
+        path: .build
+        key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+        restore-keys: |
+          ${{ runner.os }}-spm-
+    
+    - name: Build and Test
       run: |
         # Build the project first to generate the app bundle
         xcodebuild -project VocalText.xcodeproj \
           -scheme VocalText \
           -configuration Release \
           -derivedDataPath DerivedData \
+          -destination "platform=macOS,arch=arm64" \
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
-          ONLY_ACTIVE_ARCH=NO
+          ONLY_ACTIVE_ARCH=NO \
+          clean build
           
+        # Verify the app was built successfully
+        if [ ! -d "DerivedData/Build/Products/Release/VocalText.app" ]; then
+          echo "❌ Build failed - app bundle not found"
+          exit 1
+        fi
+        echo "✅ Build successful"
+        
+    - name: Get app version
+      run: |
         # Get the app version from the project
         APP_VERSION=$(defaults read "$PWD/DerivedData/Build/Products/Release/VocalText.app/Contents/Info.plist" CFBundleShortVersionString)
         echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
         echo "App version: $APP_VERSION"
+        
+        # Get build number
+        BUILD_NUMBER=$(defaults read "$PWD/DerivedData/Build/Products/Release/VocalText.app/Contents/Info.plist" CFBundleVersion)
+        echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+        echo "Build number: $BUILD_NUMBER"
     
     - name: Create build artifacts directory
       run: mkdir -p build-artifacts
@@ -49,14 +74,20 @@ jobs:
     - name: Copy app bundle to artifacts directory
       run: |
         cp -R DerivedData/Build/Products/Release/VocalText.app build-artifacts/
+        # Also copy dSYM if it exists
+        if [ -d "DerivedData/Build/Products/Release/VocalText.app.dSYM" ]; then
+          cp -R DerivedData/Build/Products/Release/VocalText.app.dSYM build-artifacts/
+        fi
     
     - name: Create ZIP archive
       run: |
         cd build-artifacts
-        zip -r "VocalText-${{ env.APP_VERSION }}.zip" "VocalText.app"
+        zip -r "VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "VocalText.app" "VocalText.app.dSYM" 2>/dev/null || zip -r "VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "VocalText.app"
+        echo "Created: VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip"
     
     - name: Upload ZIP as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: VocalText-${{ env.APP_VERSION }}.zip
-        path: build-artifacts/VocalText-${{ env.APP_VERSION }}.zip
+        name: VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
+        path: build-artifacts/VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
+        retention-days: 30

@@ -66,7 +66,7 @@ class MenuBarController: NSObject {
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            // 确保 mainView 已创建
+            // 确保 mainView 已创建（只创建一次）
             if mainView == nil {
                 mainView = MainView()
                 popover.contentViewController = NSHostingController(rootView: mainView)
