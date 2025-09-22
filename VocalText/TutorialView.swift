@@ -22,32 +22,32 @@ struct TutorialView: View {
     
     let steps = [
         TutorialStep(
-            title: "歡迎使用 VocalText",
-            description: "VocalText 是一款語音轉文字工具，可以將您的語音即時轉換為文字。",
+            title: NSLocalizedString("tutorial.step1.title", comment: ""),
+            description: NSLocalizedString("tutorial.step1.description", comment: ""),
             imageName: nil,
             contentImageName: "waveform"
         ),
         TutorialStep(
-            title: "開始錄音",
-            description: "點擊咪高峰按鈕開始錄音。錄音時，您會看到即時的音頻波形顯示。",
+            title: NSLocalizedString("tutorial.step2.title", comment: ""),
+            description: NSLocalizedString("tutorial.step2.description", comment: ""),
             imageName: nil,
             contentImageName: "mic.circle.fill"
         ),
         TutorialStep(
-            title: "查看轉錄結果",
-            description: "錄音結束後，VocalText 會自動將語音轉換為文字並顯示在螢幕上。您可以點擊文字複製到剪貼簿。",
+            title: NSLocalizedString("tutorial.step3.title", comment: ""),
+            description: NSLocalizedString("tutorial.step3.description", comment: ""),
             imageName: nil,
             contentImageName: "text.alignleft"
         ),
         TutorialStep(
-            title: "設定和自訂",
-            description: "點擊設定按鈕可以更改識別模型、選擇音頻輸入裝置和設定識別語言。",
+            title: NSLocalizedString("tutorial.step4.title", comment: ""),
+            description: NSLocalizedString("tutorial.step4.description", comment: ""),
             imageName: nil,
             contentImageName: "gear"
         ),
         TutorialStep(
-            title: "準備開始使用",
-            description: "現在您已經了解了基本功能，可以開始使用 VocalText 了。祝您使用愉快！",
+            title: NSLocalizedString("tutorial.step5.title", comment: ""),
+            description: NSLocalizedString("tutorial.step5.description", comment: ""),
             imageName: nil,
             contentImageName: "checkmark.circle.fill"
         )
@@ -100,7 +100,7 @@ struct TutorialView: View {
                 if currentStep == 0 {
                     Spacer()
                 } else {
-                    Button("上一步") {
+                    Button("tutorial.previous.button") {
                         withAnimation {
                             currentStep -= 1
                         }
@@ -113,7 +113,7 @@ struct TutorialView: View {
                 Spacer()
                 
                 if currentStep == steps.count - 1 {
-                    Button("開始使用") {
+                    Button("tutorial.start.using.button") {
                         // 保存教程已完成的状态
                         UserDefaults.standard.set(true, forKey: "HasCompletedTutorial")
                         // 调用完成回调（请求麦克风权限）
@@ -124,7 +124,7 @@ struct TutorialView: View {
                     .foregroundColor(.blue)
                     .cornerRadius(6)
                 } else {
-                    Button("下一步") {
+                    Button("tutorial.next.button") {
                         withAnimation {
                             currentStep += 1
                         }

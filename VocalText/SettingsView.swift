@@ -13,7 +13,8 @@ struct SettingsView: View {
     @State private var selectedModel = "tiny"
     @State private var selectedDeviceIndex = 0
     @State private var selectedLanguage = "zh"  // 默认选择中文
-    
+    @AppStorage("selectedLanguage") private var uiLanguage: String = "en"
+
     let models = ["tiny", "base", "small", "medium", "large-v3"]
     let languages = [
         ("zh", "中文"),
@@ -23,6 +24,11 @@ struct SettingsView: View {
         ("fr", "Français"),
         ("de", "Deutsch"),
         ("es", "Español")
+    ]
+    let uiLanguages = [
+        ("en", "English"),
+        ("zh-Hans", "简体中文"),
+        ("zh-Hant", "繁體中文")
     ]
     
     init(isPresented: Binding<Bool>) {
@@ -45,7 +51,7 @@ struct SettingsView: View {
     var body: some View {
         VStack {
             HStack {
-                Text("設置")
+                Text("settings.view.title")
                     .font(.headline)
                 Spacer()
                 Button(action: {
@@ -66,7 +72,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("模型選擇")
+                            Text("settings.view.model.selection.label")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             
@@ -75,11 +81,11 @@ struct SettingsView: View {
                                     HStack {
                                         Text(model)
                                         if audioTranscriber.isModelAlreadyDownloaded(model: model) {
-                                            Text("(已下載)")
+                                            Text("settings.view.model.downloaded.status")
                                                 .foregroundColor(.green)
                                                 .font(.caption)
                                         } else {
-                                            Text("(需要下載)")
+                                            Text("settings.view.model.download.required.status")
                                                 .foregroundColor(.red)
                                                 .font(.caption)
                                         }
@@ -94,12 +100,12 @@ struct SettingsView: View {
                         Divider()
                         
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("音頻輸入設備")
+                            Text("settings.view.audio.input.device.label")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             
                             if audioTranscriber.audioDevices.isEmpty {
-                                Text("沒有可用的音頻輸入設備，請連接麥克風或其他音頻輸入設備")
+                                Text("settings.view.no.audio.device.available.message")
                                     .foregroundColor(.secondary)
                                     .font(.caption)
                             } else {
@@ -117,12 +123,29 @@ struct SettingsView: View {
                         Divider()
                         
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("語言設置")
+                            Text("settings.view.transcription.language.label")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             
                             Picker("", selection: $selectedLanguage) {
                                 ForEach(languages, id: \.0) { code, name in
+                                    Text(name).tag(code)
+                                }
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("settings.view.app.language.label")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            
+                            Picker("", selection: $uiLanguage) {
+                                ForEach(uiLanguages, id: \.0) { code, name in
                                     Text(name).tag(code)
                                 }
                             }
@@ -140,7 +163,7 @@ struct SettingsView: View {
                 Divider()
                 
                 // 保存按钮放在底部
-                Button("保存") {
+                Button("general.save.button") {
                     // 保存设置到 UserDefaults
                     UserDefaults.standard.set(selectedModel, forKey: "SelectedModel")
                     UserDefaults.standard.set(selectedDeviceIndex, forKey: "SelectedDeviceIndex")

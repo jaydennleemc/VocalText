@@ -10,7 +10,6 @@ import SwiftUI
 @main
 struct VocalTextApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
-    
     var body: some Scene {
         // 移除 WindowGroup 以创建无窗口应用
         Settings {

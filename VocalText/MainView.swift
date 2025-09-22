@@ -152,7 +152,7 @@ struct MainView: View {
                 if !hasCheckedModelStatus {
                     // 还未检查模型状态，显示加载状态
                     VStack {
-                        Text("正在檢查模型狀態...")
+                        Text("main.view.checking.model.status")
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                             .padding()
@@ -161,7 +161,7 @@ struct MainView: View {
                 } else if isCheckingMicrophonePermission {
                     // 正在检查麦克风权限，显示加载状态
                     VStack {
-                        Text("正在請求麥克風權限...")
+                        Text("main.view.requesting.microphone.permission")
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                             .padding()
@@ -203,9 +203,9 @@ struct MainView: View {
                             if !hasMicrophonePermission && hasRequestedMicrophonePermission {
                                 // 用户拒绝了麦克风权限
                                 VStack(alignment: .leading, spacing: 10) {
-                                    Text("需要麥克風權限才能錄音")
+                                    Text("main.view.microphone.permission.needed")
                                         .font(.headline)
-                                    Text("此應用需要訪問您的麥克風以錄製音頻並轉錄為文字。請點擊下方按鈕授予權限。")
+                                    Text("main.view.microphone.permission.description")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -220,7 +220,7 @@ struct MainView: View {
                                             Image(systemName: "mic.slash.fill")
                                                 .font(.system(size: 40))
                                                 .foregroundColor(.gray)
-                                            Text("未檢測到音頻設備")
+                                            Text("main.view.no.audio.device.detected")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                                 .padding(.top, 5)
@@ -231,7 +231,7 @@ struct MainView: View {
                                                 copyToClipboard(audioTranscriber.transcript)
                                             }
                                             .contextMenu {
-                                                Button("复制到剪贴板") {
+                                                Button("main.view.copy.to.clipboard") {
                                                     copyToClipboard(audioTranscriber.transcript)
                                                 }
                                             }
@@ -261,7 +261,7 @@ struct MainView: View {
                     Button(action: {
                         requestMicrophonePermission()
                     }) {
-                        Text("獲取麥克風權限")
+                        Text("main.view.get.microphone.permission")
                             .padding()
                             .background(Color.blue)
                             .foregroundColor(.white)
@@ -273,9 +273,9 @@ struct MainView: View {
                 } else if !hasAudioInputDevices {
                     // 没有音频输入设备，显示提示信息
                     VStack(spacing: 10) {
-                        Text("未檢測到音頻輸入設備")
+                        Text("main.view.no.audio.input.device.detected.title")
                             .font(.headline)
-                        Text("請連接麥克風或其他音頻輸入設備")
+                        Text("main.view.connect.audio.input.device.prompt")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -505,10 +505,10 @@ struct MainView: View {
                     if !self.hasMicrophonePermission {
                         // 显示系统设置提示
                         let alert = NSAlert()
-                        alert.messageText = "需要麥克風權限"
-                        alert.informativeText = "請在系統設置中允許此應用訪問麥克風。"
-                        alert.addButton(withTitle: "打開設置")
-                        alert.addButton(withTitle: "取消")
+                        alert.messageText = NSLocalizedString("main.view.microphone.permission.needed.alert.title", comment: "")
+                        alert.informativeText = NSLocalizedString("main.view.microphone.permission.needed.alert.message", comment: "")
+                        alert.addButton(withTitle: NSLocalizedString("main.view.open.settings.button", comment: ""))
+                        alert.addButton(withTitle: NSLocalizedString("general.cancel.button", comment: ""))
                         
                         if alert.runModal() == .alertFirstButtonReturn {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
@@ -524,10 +524,10 @@ struct MainView: View {
                 if !self.hasMicrophonePermission {
                     // 显示系统设置提示
                     let alert = NSAlert()
-                    alert.messageText = "需要麥克風權限"
-                    alert.informativeText = "請在系統設置中允許此應用訪問麥克風。"
-                    alert.addButton(withTitle: "打開設置")
-                    alert.addButton(withTitle: "取消")
+                    alert.messageText = NSLocalizedString("main.view.microphone.permission.needed.alert.title", comment: "")
+                    alert.informativeText = NSLocalizedString("main.view.microphone.permission.needed.alert.message", comment: "")
+                    alert.addButton(withTitle: NSLocalizedString("main.view.open.settings.button", comment: ""))
+                    alert.addButton(withTitle: NSLocalizedString("general.cancel.button", comment: ""))
                     
                     if alert.runModal() == .alertFirstButtonReturn {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
@@ -550,10 +550,10 @@ struct MainView: View {
                 if !granted {
                     // 显示系统设置提示
                     let alert = NSAlert()
-                    alert.messageText = "需要麥克風權限"
-                    alert.informativeText = "請在系統設置中允許此應用訪問麥克風。"
-                    alert.addButton(withTitle: "打開設置")
-                    alert.addButton(withTitle: "取消")
+                    alert.messageText = NSLocalizedString("main.view.microphone.permission.needed.alert.title", comment: "")
+                    alert.informativeText = NSLocalizedString("main.view.microphone.permission.needed.alert.message", comment: "")
+                    alert.addButton(withTitle: NSLocalizedString("main.view.open.settings.button", comment: ""))
+                    alert.addButton(withTitle: NSLocalizedString("general.cancel.button", comment: ""))
                     
                     if alert.runModal() == .alertFirstButtonReturn {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
@@ -670,8 +670,8 @@ struct MainView: View {
             if granted {
                 // 创建并发送通知
                 let content = UNMutableNotificationContent()
-                content.title = "已複製"
-                content.body = "文本已複製到剪貼板"
+                content.title = NSLocalizedString("main.view.copied.notification.title", comment: "")
+                content.body = NSLocalizedString("main.view.copied.notification.body", comment: "")
                 content.sound = .default
                 
                 let request = UNNotificationRequest(identifier: "CopyToClipboard", content: content, trigger: nil)
@@ -732,7 +732,7 @@ struct SettingsMenuView: View {
             Button(action: {
                 NSApp.terminate(nil)
             }) {
-                Text("退出")
+                Text("general.quit.button")
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)

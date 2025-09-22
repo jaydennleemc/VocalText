@@ -7,15 +7,19 @@
 
 import Cocoa
 import SwiftUI
+import Combine
 
 class MenuBarController: NSObject {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
-    private var mainView: MainView!
+    private var hostingController: NSHostingController<AnyView>!
     
+    private var cancellables = Set<AnyCancellable>()
+
     override init() {
         super.init()
         setupMenuBar()
+        setupLocalizationObserver()
     }
     
     private func setupMenuBar() {
@@ -30,11 +34,28 @@ class MenuBarController: NSObject {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         
-        // 创建弹出窗口
+        // 创建弹出窗口并设置初始内容
         popover = NSPopover()
-        mainView = MainView()
-        popover.contentViewController = NSHostingController(rootView: mainView)
+        hostingController = NSHostingController(rootView: AnyView(MainView()))
+        popover.contentViewController = hostingController
         popover.behavior = .transient
+        
+        // Set initial language
+        updateLocale()
+    }
+    
+    private func setupLocalizationObserver() {
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .debounce(for: .milliseconds(50), scheduler: RunLoop.main) // Debounce to avoid rapid updates
+            .sink { [weak self] _ in
+                self?.updateLocale()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func updateLocale() {
+        let language = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en"
+        hostingController.rootView = AnyView(MainView().environment(\.locale, .init(identifier: language)))
     }
     
     @objc private func statusBarButtonClicked() {
@@ -54,7 +75,7 @@ class MenuBarController: NSObject {
         let menu = NSMenu()
         
         // 添加退出选项
-        let quitItem = NSMenuItem(title: "退出", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: NSLocalizedString("general.quit.button", comment: ""), action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         
@@ -66,12 +87,6 @@ class MenuBarController: NSObject {
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            // 确保 mainView 已创建（只创建一次）
-            if mainView == nil {
-                mainView = MainView()
-                popover.contentViewController = NSHostingController(rootView: mainView)
-            }
-            
             if let button = statusItem.button {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
             }
