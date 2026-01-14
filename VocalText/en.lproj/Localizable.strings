@@ -1,4 +1,41 @@
 /* English localizations */
+
+/* Recording States */
+"recording.state.ready" = "Click to start recording...";
+"recording.state.recording" = "Recording...";
+"recording.state.processing" = "Recording stopped, processing...";
+"recording.state.error" = "Recording error occurred";
+
+/* Model Status */
+"model.status.preparing" = "Preparing to download model...";
+"model.status.checking" = "Checking %@ model...";
+"model.status.downloading" = "Downloading %@ (%.0f%%)";
+"model.status.downloaded" = "Model downloaded successfully";
+"model.status.download.failed" = "Model download failed: %@";
+"model.status.download.required" = "Model not downloaded, please download first";
+"model.status.load.failed" = "Model failed to load: %@";
+
+/* Error Messages */
+"error.audio.noDevice" = "No audio input device detected, please connect a microphone or other audio input device";
+"error.audio.permissionDenied" = "Microphone permission denied";
+"error.audio.engineFailed" = "Audio engine initialization failed";
+"error.audio.processingFailed" = "Audio processing failed: %@";
+"error.recording.startFailed" = "Recording start failed: %@";
+"error.network.notConnected" = "No internet connection";
+"error.network.timeout" = "Connection timeout";
+"error.network.serverNotFound" = "Server not found";
+"error.network.generic" = "Network error: %@";
+"error.transcription.failed" = "Transcription failed: %@";
+"error.transcription.emptyResult" = "No audio data recorded";
+"error.file.notFound" = "Audio file not found";
+"error.file.empty" = "Audio file is empty";
+"error.generic.unknown" = "Unknown error occurred";
+"error.generic.invalidState" = "Audio engine not initialized";
+
+/* Status Messages */
+"status.device.unknown" = "Unknown device";
+
+/* UI Elements */
 "main.view.checking.model.status" = "Checking model status...";
 "main.view.requesting.microphone.permission" = "Requesting microphone permission...";
 "main.view.microphone.permission.needed" = "Microphone Permission Required";
@@ -11,10 +48,20 @@
 "main.view.microphone.permission.needed.alert.title" = "Microphone Permission Needed";
 "main.view.microphone.permission.needed.alert.message" = "Please allow this app to access the microphone in System Settings.";
 "main.view.open.settings.button" = "Open Settings";
-"general.cancel.button" = "Cancel";
 "main.view.copied.notification.title" = "Copied";
 "main.view.copied.notification.body" = "Text has been copied to the clipboard";
+
+/* General Buttons */
+"general.save.button" = "Save";
+"general.cancel.button" = "Cancel";
 "general.quit.button" = "Quit";
+"general.ok.button" = "OK";
+"general.retry.button" = "Retry";
+"general.next.button" = "Next";
+"general.previous.button" = "Previous";
+"general.start.using.button" = "Start Using";
+
+/* Settings */
 "settings.view.title" = "Settings";
 "settings.view.model.selection.label" = "Model Selection";
 "settings.view.model.downloaded.status" = "(Downloaded)";
@@ -23,7 +70,8 @@
 "settings.view.no.audio.device.available.message" = "No audio input devices available. Please connect a microphone or other audio input device.";
 "settings.view.transcription.language.label" = "Transcription Language";
 "settings.view.app.language.label" = "App Language";
-"general.save.button" = "Save";
+
+/* Tutorial */
 "tutorial.step1.title" = "Welcome to VocalText";
 "tutorial.step1.description" = "VocalText is a voice-to-text tool that converts your speech into text in real time.";
 "tutorial.step2.title" = "Start Recording";

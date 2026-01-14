@@ -1,0 +1,3 @@
+/* Localized Info.plist entries for Simplified Chinese */
+
+"NSMicrophoneUsageDescription" = "为了让语音转文字功能正常运作，此应用需要访问您的麦克风。允许后，您可以轻松用语音输入内容。";

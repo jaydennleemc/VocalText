@@ -1,4 +1,41 @@
 /* Simplified Chinese localizations */
+
+/* Recording States */
+"recording.state.ready" = "点击开始录音...";
+"recording.state.recording" = "正在录音...";
+"recording.state.processing" = "录音已停止，正在处理...";
+"recording.state.error" = "录音出错";
+
+/* Model Status */
+"model.status.preparing" = "准备下载模型...";
+"model.status.checking" = "正在检查 %@ 模型...";
+"model.status.downloading" = "正在下载模型: %@ (%.0f%%)";
+"model.status.downloaded" = "模型下载完成";
+"model.status.download.failed" = "模型下载失败: %@";
+"model.status.download.required" = "模型未下载，请先下载";
+"model.status.load.failed" = "模型加载失败: %@";
+
+/* Error Messages */
+"error.audio.noDevice" = "未检测到音频输入设备，请连接麦克风或其他音频输入设备";
+"error.audio.permissionDenied" = "麦克风权限被拒绝";
+"error.audio.engineFailed" = "音频引擎初始化失败";
+"error.audio.processingFailed" = "音频处理失败: %@";
+"error.recording.startFailed" = "录音启动失败: %@";
+"error.network.notConnected" = "无网络连接";
+"error.network.timeout" = "连接超时";
+"error.network.serverNotFound" = "找不到服务器";
+"error.network.generic" = "网络错误: %@";
+"error.transcription.failed" = "转录失败: %@";
+"error.transcription.emptyResult" = "没有录制到音频数据";
+"error.file.notFound" = "音频文件不存在";
+"error.file.empty" = "音频文件为空";
+"error.generic.unknown" = "发生未知错误";
+"error.generic.invalidState" = "音频引擎未初始化";
+
+/* Status Messages */
+"status.device.unknown" = "未知设备";
+
+/* UI Elements */
 "main.view.checking.model.status" = "正在检查模型状态...";
 "main.view.requesting.microphone.permission" = "正在请求麦克风权限...";
 "main.view.microphone.permission.needed" = "需要麦克风权限";
@@ -11,10 +48,20 @@
 "main.view.microphone.permission.needed.alert.title" = "需要麦克风权限";
 "main.view.microphone.permission.needed.alert.message" = "请在系统设置中允许此应用访问麦克风。";
 "main.view.open.settings.button" = "打开设置";
-"general.cancel.button" = "取消";
 "main.view.copied.notification.title" = "已复制";
 "main.view.copied.notification.body" = "文本已复制到剪贴板";
+
+/* General Buttons */
+"general.save.button" = "保存";
+"general.cancel.button" = "取消";
 "general.quit.button" = "退出";
+"general.ok.button" = "确定";
+"general.retry.button" = "重试";
+"general.next.button" = "下一步";
+"general.previous.button" = "上一步";
+"general.start.using.button" = "开始使用";
+
+/* Settings */
 "settings.view.title" = "设置";
 "settings.view.model.selection.label" = "模型选择";
 "settings.view.model.downloaded.status" = "(已下载)";
@@ -23,7 +70,8 @@
 "settings.view.no.audio.device.available.message" = "没有可用的音频输入设备，请连接麦克风或其他音频输入设备。";
 "settings.view.transcription.language.label" = "转录语言";
 "settings.view.app.language.label" = "应用语言";
-"general.save.button" = "保存";
+
+/* Tutorial */
 "tutorial.step1.title" = "欢迎使用 VocalText";
 "tutorial.step1.description" = "VocalText 是一款语音转文字工具，可以实时将您的语音转换为文本。";
 "tutorial.step2.title" = "开始录音";

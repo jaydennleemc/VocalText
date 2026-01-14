@@ -25,10 +25,10 @@ class AudioTranscriber: NSObject, ObservableObject {
     
     @Published var isRecording = false
     @Published var isTranscribing = false // 添加转录状态
-    @Published var transcript = "點擊開始錄音..."
+    @Published var transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
     @Published var isDownloading = false
     @Published var downloadProgress: Double = 0.0
-    @Published var downloadStatus = "準備下載模型..."
+    @Published var downloadStatus = NSLocalizedString("model.status.preparing", comment: "Preparing to download model")
     @Published var volumeLevel: Double = 0.0 // 添加音量级别属性
     @Published var recordingTime: TimeInterval = 0.0 // 添加录音时间属性
     
@@ -130,7 +130,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         
         do {
             isDownloading = true
-            downloadStatus = "正在檢查 \(currentModel) 模型..."
+            downloadStatus = String(format: NSLocalizedString("model.status.checking", comment: "Checking model"), currentModel)
             downloadProgress = 0.0
             
             // 发送开始下载通知
@@ -140,11 +140,11 @@ class AudioTranscriber: NSObject, ObservableObject {
             let progressHandler: (Progress) -> Void = { progress in
                 DispatchQueue.main.async {
                     self.downloadProgress = progress.fractionCompleted
-                    self.downloadStatus = "正在下載 \(self.currentModel) 模型... \(Int(progress.fractionCompleted * 100))%"
+                    self.downloadStatus = String(format: NSLocalizedString("model.status.downloading", comment: "Downloading model"), self.currentModel, progress.fractionCompleted * 100)
                 }
             }
             
-            downloadStatus = "正在下載 \(currentModel) 模型..."
+            downloadStatus = String(format: NSLocalizedString("model.status.downloading", comment: "Downloading model"), currentModel, 0.0)
             
             // 下载模型
             _ = try await WhisperKit.download(
@@ -153,7 +153,7 @@ class AudioTranscriber: NSObject, ObservableObject {
             )
             
             isDownloading = false
-            downloadStatus = "模型下載完成"
+            downloadStatus = NSLocalizedString("model.status.downloaded", comment: "Model downloaded successfully")
             modelDownloaded = true // 标记模型已下载
             
             // 发送下载完成通知
@@ -165,7 +165,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         } catch let error as NSError {
             print("模型下載失敗: \(error)")
             isDownloading = false
-            downloadStatus = "模型下載失敗: \(error.localizedDescription)"
+            downloadStatus = String(format: NSLocalizedString("model.status.download.failed", comment: "Model download failed"), error.localizedDescription)
             modelDownloaded = false // 确保标记为未下载
             
             // 发送下载完成通知（即使是失败的情况）
@@ -175,23 +175,23 @@ class AudioTranscriber: NSObject, ObservableObject {
             if error.domain == NSURLErrorDomain {
                 switch error.code {
                 case NSURLErrorNotConnectedToInternet:
-                    downloadStatus = "模型下載失敗: 無網絡連接"
+                    downloadStatus = NSLocalizedString("error.network.notConnected", comment: "No internet connection")
                 case NSURLErrorTimedOut:
-                    downloadStatus = "模型下載失敗: 連接超時"
+                    downloadStatus = NSLocalizedString("error.network.timeout", comment: "Connection timeout")
                 case NSURLErrorCannotFindHost:
-                    downloadStatus = "模型下載失敗: 無法找到服務器"
+                    downloadStatus = NSLocalizedString("error.network.serverNotFound", comment: "Server not found")
                 default:
-                    downloadStatus = "模型下載失敗: 網絡錯誤 (\(error.localizedDescription))"
+                    downloadStatus = String(format: NSLocalizedString("error.network.generic", comment: "Network error"), error.localizedDescription)
                 }
             } else {
-                downloadStatus = "模型下載失敗: \(error.localizedDescription)"
+                downloadStatus = String(format: NSLocalizedString("model.status.download.failed", comment: "Model download failed"), error.localizedDescription)
             }
             
             return false
         } catch {
             print("模型下載失敗: \(error)")
             isDownloading = false
-            downloadStatus = "模型下載失敗: 未知錯誤"
+            downloadStatus = NSLocalizedString("error.generic.unknown", comment: "Unknown error")
             modelDownloaded = false // 确保标记为未下载
             
             // 发送下载完成通知（即使是失败的情况）
@@ -204,13 +204,13 @@ class AudioTranscriber: NSObject, ObservableObject {
     func startRecording() {
         // 检查是否有音频输入设备
         if !hasAvailableAudioInputDevices() {
-            transcript = "未檢測到音頻輸入設備，請連接麥克風或其他音頻輸入設備"
+            transcript = NSLocalizedString("error.audio.noDevice", comment: "No audio input device detected")
             return
         }
         
         isRecording = true
         recordingTime = 0.0 // 重置录音时间
-        transcript = "正在錄音..."
+        transcript = NSLocalizedString("recording.state.recording", comment: "Recording")
         audioData = Data() // 重置音频数据
         
         // 启动录音计时器
@@ -226,7 +226,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         // 直接开始录音，权限检查应该在调用此方法之前完成
         // 先检查模型是否已下载
         if !self.isModelAlreadyDownloaded() {
-            self.transcript = "模型未下載，請先下載模型"
+            self.transcript = NSLocalizedString("model.status.download.required", comment: "Model not downloaded")
             self.isRecording = false
             // 发送录音停止通知
             NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
@@ -311,7 +311,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         } catch {
             print("WhisperKit 初始化失敗: \(error)")
             await MainActor.run {
-                self.transcript = "模型加載失敗: \(error.localizedDescription)"
+                self.transcript = String(format: NSLocalizedString("model.status.load.failed", comment: "Model failed to load"), error.localizedDescription)
                 self.isRecording = false
             }
         }
@@ -336,7 +336,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         audioEngine = AVAudioEngine()
         
         guard let audioEngine = audioEngine else { 
-            transcript = "音頻引擎初始化失敗"
+            transcript = NSLocalizedString("error.audio.engineFailed", comment: "Audio engine initialization failed")
             isRecording = false
             return
         }
@@ -398,7 +398,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         } catch {
             print("无法启动音频引擎: \(error)")
             isRecording = false
-            transcript = "錄音啟動失敗: \(error.localizedDescription)"
+            transcript = String(format: NSLocalizedString("error.recording.startFailed", comment: "Recording start failed"), error.localizedDescription)
         }
     }
     
@@ -476,7 +476,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
         
         guard let audioEngine = audioEngine else { 
-            transcript = "音頻引擎未初始化"
+            transcript = NSLocalizedString("error.generic.invalidState", comment: "Audio engine not initialized")
             return 
         }
         
@@ -491,20 +491,20 @@ class AudioTranscriber: NSObject, ObservableObject {
         
         print("音頻錄製已停止")
         print("總音頻數據大小: \(audioData.count) 字節")
-        transcript = "錄音已停止，正在處理..."
+        transcript = NSLocalizedString("recording.state.processing", comment: "Processing recording")
         
         // 只有在有音频数据时才处理
         if !audioData.isEmpty {
             // 处理音频数据
             processAudio()
         } else {
-            transcript = "沒有錄製到音頻數據"
+            transcript = NSLocalizedString("error.transcription.emptyResult", comment: "No audio data recorded")
         }
     }
     
     private func processAudio() {
         guard !audioData.isEmpty else {
-            transcript = "沒有錄製到音頻數據"
+            transcript = NSLocalizedString("error.transcription.emptyResult", comment: "No audio data recorded")
             return
         }
         
@@ -538,7 +538,7 @@ class AudioTranscriber: NSObject, ObservableObject {
             } catch {
                 print("音频处理失败: \(error)")
                 await MainActor.run {
-                    self.transcript = "音頻處理失敗: \(error.localizedDescription)"
+                    self.transcript = String(format: NSLocalizedString("error.audio.processingFailed", comment: "Audio processing failed"), error.localizedDescription)
                 }
             }
         }
@@ -720,7 +720,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         guard let whisperKit = whisperKit else {
             print("WhisperKit 未初始化")
             await MainActor.run {
-                self.transcript = "模型未正確加載，請重新下載模型"
+                self.transcript = NSLocalizedString("model.status.load.failed", comment: "Model failed to load")
             }
             return
         }
@@ -729,7 +729,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         if !FileManager.default.fileExists(atPath: audioFilePath) {
             print("音频文件不存在: \(audioFilePath)")
             await MainActor.run {
-                self.transcript = "音頻文件不存在"
+                self.transcript = NSLocalizedString("error.file.notFound", comment: "Audio file not found")
             }
             return
         }
@@ -741,7 +741,7 @@ class AudioTranscriber: NSObject, ObservableObject {
                 print("轉錄文件大小: \(fileSize) 字節")
                 if fileSize.intValue == 0 {
                     await MainActor.run {
-                        self.transcript = "音頻文件為空"
+                        self.transcript = NSLocalizedString("error.file.empty", comment: "Audio file is empty")
                     }
                     return
                 }
@@ -772,25 +772,25 @@ class AudioTranscriber: NSObject, ObservableObject {
             
             await MainActor.run {
                 // 处理转录结果
-                var extractedText = "轉錄結果為空"
+                var extractedText = NSLocalizedString("error.transcription.emptyResult", comment: "Empty transcription result")
                 
                 if let results = result as? [TranscriptionResult] {
                     // 如果是TranscriptionResult数组
                     if let firstResult = results.first {
-                        extractedText = firstResult.text ?? "轉錄結果為空"
+                        extractedText = firstResult.text ?? NSLocalizedString("error.transcription.emptyResult", comment: "Empty transcription result")
                     }
                 } else if let textResults = result as? [String] {
                     // 如果是字符串数组
                     if let firstText = textResults.first {
-                        extractedText = firstText.isEmpty ? "轉錄結果為空" : firstText
+                        extractedText = firstText.isEmpty ? NSLocalizedString("error.transcription.emptyResult", comment: "Empty transcription result") : firstText
                     }
                 } else if let singleText = result as? String {
                     // 如果是单个字符串
-                    extractedText = singleText.isEmpty ? "轉錄結果為空" : singleText
+                    extractedText = singleText.isEmpty ? NSLocalizedString("error.transcription.emptyResult", comment: "Empty transcription result") : singleText
                 } else {
                     // 尝试获取text属性
                     if let text = (result as? NSObject)?.value(forKey: "text") as? String {
-                        extractedText = text.isEmpty ? "轉錄結果為空" : text
+                        extractedText = text.isEmpty ? NSLocalizedString("error.transcription.emptyResult", comment: "Empty transcription result") : text
                     }
                 }
                 
@@ -800,7 +800,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         } catch {
             print("转录失败: \(error)")
             await MainActor.run {
-                self.transcript = "轉錄失敗: \(error.localizedDescription)"
+                self.transcript = String(format: NSLocalizedString("error.transcription.failed", comment: "Transcription failed"), error.localizedDescription)
             }
         }
     }
@@ -816,7 +816,7 @@ class AudioTranscriber: NSObject, ObservableObject {
         let devices = getAvailableAudioDevicesSync()
         // 过滤掉"未知设备"等无效设备
         let validDevices = devices.filter { device in
-            return device.name != "未知设备" && !device.name.isEmpty
+            return device.name != NSLocalizedString("status.device.unknown", comment: "Unknown device") && !device.name.isEmpty
         }
         return !validDevices.isEmpty
     }
@@ -859,7 +859,7 @@ class AudioTranscriber: NSObject, ObservableObject {
             if streamCount > 0 {
                 let deviceName = getDeviceName(deviceID: deviceID)
                 // 只添加有效的设备（不是"未知设备"且名称不为空）
-                if deviceName != "未知设备" && !deviceName.isEmpty {
+                if deviceName != NSLocalizedString("status.device.unknown", comment: "Unknown device") && !deviceName.isEmpty {
                     devices.append(AudioDevice(id: deviceID, name: deviceName))
                 }
             }
@@ -895,14 +895,14 @@ class AudioTranscriber: NSObject, ObservableObject {
         
         propertySize = 0
         var status = AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &propertySize)
-        if status != noErr { return "未知设备" }
+        if status != noErr { return NSLocalizedString("status.device.unknown", comment: "Unknown device") }
         
         var deviceNameCFString: CFString?
         status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &propertySize, &deviceNameCFString)
         if status == noErr, let name = deviceNameCFString {
             deviceName = name as String
         } else {
-            deviceName = "未知设备"
+            deviceName = NSLocalizedString("status.device.unknown", comment: "Unknown device")
         }
         
         return deviceName

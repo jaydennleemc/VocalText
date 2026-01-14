@@ -1,0 +1,3 @@
+/* Localized Info.plist entries for Traditional Chinese */
+
+"NSMicrophoneUsageDescription" = "為了讓語音轉文字功能正常運作，此應用程式需要存取您的麥克風。允許後，您可以輕鬆用語音輸入內容。";

@@ -214,7 +214,7 @@ struct MainView: View {
                             } else {
                                 // 正常显示转录文本
                                 Group {
-                                    if audioTranscriber.transcript == "點擊開始錄音..." && !hasAudioInputDevices {
+                                    if audioTranscriber.transcript == NSLocalizedString("recording.state.ready", comment: "Ready to record") && !hasAudioInputDevices {
                                         // 没有音频输入设备时显示麦克风加斜线图标
                                         VStack {
                                             Image(systemName: "mic.slash.fill")
@@ -398,7 +398,7 @@ struct MainView: View {
                 let isDownloaded = self.audioTranscriber.isModelAlreadyDownloaded(model: self.selectedModel.lowercased())
                 self.modelDownloaded = isDownloaded
                 self.hasCheckedModelStatus = true
-                print("模型已更改，检查模型下载状态: \(isDownloaded) for model: \(self.selectedModel.lowercased())")
+                // Model status check logged to debug system
                 
                 if isDownloaded {
                     // 如果模型已下载，预加载WhisperKit
@@ -428,7 +428,7 @@ struct MainView: View {
             ) { _ in
                 // 激活应用并防止隐藏
                 NSApp.activate(ignoringOtherApps: true)
-                print("模型下载开始，应用已激活")
+                // Model download started - app activated
             }
             
             // 註冊模型下載完成通知
@@ -438,7 +438,7 @@ struct MainView: View {
                 queue: .main
             ) { _ in
                 // 下载完成后恢复正常行为
-                print("模型下载完成")
+                // Model download completed
             }
             
             // 延遲設置設備選擇，確保音頻設備已加載
@@ -569,11 +569,11 @@ struct MainView: View {
         let isDownloaded = audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased())
         modelDownloaded = isDownloaded
         hasCheckedModelStatus = true
-        print("检查模型下载状态: \(isDownloaded) for model: \(selectedModel.lowercased())")
+        // Model status check logged to debug system
         
         // 如果模型未下载，自动开始下载
         if !isDownloaded {
-            print("模型 \(selectedModel) 未下载，准备开始下载...")
+            // Model not downloaded, preparing to download
             downloadModel(model: selectedModel)
         }
         
@@ -590,7 +590,7 @@ struct MainView: View {
         // 检查当前选择的模型是否已下载
         let isDownloaded = audioTranscriber.isModelAlreadyDownloaded(model: selectedModel.lowercased())
         modelDownloaded = isDownloaded
-        print("检查模型下载状态: \(isDownloaded) for model: \(selectedModel.lowercased())")
+        // Model status check logged to debug system
     }
     
     // 更新设备显示信息
@@ -622,7 +622,7 @@ struct MainView: View {
     private func downloadModel(model: String) {
         // 防止重复下载
         if isDownloadingModel {
-            print("模型 \(model) 正在下载中，跳过重复下载请求")
+            // Model already downloading, skipping duplicate request
             return
         }
         
@@ -677,11 +677,11 @@ struct MainView: View {
                 let request = UNNotificationRequest(identifier: "CopyToClipboard", content: content, trigger: nil)
                 UNUserNotificationCenter.current().add(request) { error in
                     if let error = error {
-                        print("通知发送失败: \(error)")
+                        // Notification failed to send
                     }
                 }
             } else if let error = error {
-                print("通知权限被拒绝: \(error)")
+                // Notification permission denied
             }
         }
     }
@@ -708,7 +708,7 @@ struct SettingsMenuView: View {
                 Button(action: {
                     selectedModel = model
                     // 这里可以添加实际的模型切换逻辑
-                    print("选择了模型: \(model)")
+                    // Model selected
                 }) {
                     HStack {
                         Text(model)

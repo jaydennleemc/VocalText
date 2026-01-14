@@ -1,0 +1,3 @@
+/* Localized Info.plist entries for English */
+
+"NSMicrophoneUsageDescription" = "This app needs to access your microphone to enable voice-to-text transcription. After granting permission, you can easily input content using your voice.";

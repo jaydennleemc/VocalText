@@ -1,4 +1,41 @@
 /* Traditional Chinese localizations */
+
+/* Recording States */
+"recording.state.ready" = "點擊開始錄音...";
+"recording.state.recording" = "正在錄音...";
+"recording.state.processing" = "錄音已停止，正在處理...";
+"recording.state.error" = "錄音出錯";
+
+/* Model Status */
+"model.status.preparing" = "準備下載模型...";
+"model.status.checking" = "正在檢查 %@ 模型...";
+"model.status.downloading" = "正在下載模型: %@ (%.0f%%)";
+"model.status.downloaded" = "模型下載完成";
+"model.status.download.failed" = "模型下載失敗: %@";
+"model.status.download.required" = "模型未下載，請先下載";
+"model.status.load.failed" = "模型加載失敗: %@";
+
+/* Error Messages */
+"error.audio.noDevice" = "未檢測到音頻輸入設備，請連接麥克風或其他音頻輸入設備";
+"error.audio.permissionDenied" = "麥克風權限被拒絕";
+"error.audio.engineFailed" = "音頻引擎初始化失敗";
+"error.audio.processingFailed" = "音頻處理失敗: %@";
+"error.recording.startFailed" = "錄音啟動失敗: %@";
+"error.network.notConnected" = "無網絡連接";
+"error.network.timeout" = "連接超時";
+"error.network.serverNotFound" = "找不到伺服器";
+"error.network.generic" = "網絡錯誤: %@";
+"error.transcription.failed" = "轉錄失敗: %@";
+"error.transcription.emptyResult" = "沒有錄製到音頻數據";
+"error.file.notFound" = "音頻文件不存在";
+"error.file.empty" = "音頻文件為空";
+"error.generic.unknown" = "發生未知錯誤";
+"error.generic.invalidState" = "音頻引擎未初始化";
+
+/* Status Messages */
+"status.device.unknown" = "未知設備";
+
+/* UI Elements */
 "main.view.checking.model.status" = "正在檢查模型狀態...";
 "main.view.requesting.microphone.permission" = "正在請求麥克風權限...";
 "main.view.microphone.permission.needed" = "需要麥克風權限";
@@ -11,10 +48,20 @@
 "main.view.microphone.permission.needed.alert.title" = "需要麥克風權限";
 "main.view.microphone.permission.needed.alert.message" = "請在系統設置中允許此應用訪問麥克風。";
 "main.view.open.settings.button" = "打開設置";
-"general.cancel.button" = "取消";
 "main.view.copied.notification.title" = "已複製";
-"main.view.copied.notification.body" = "文本已複製到剪貼板";
+"main.view.copied.notification.body" = "文字已複製到剪貼簿";
+
+/* General Buttons */
+"general.save.button" = "保存";
+"general.cancel.button" = "取消";
 "general.quit.button" = "退出";
+"general.ok.button" = "確定";
+"general.retry.button" = "重試";
+"general.next.button" = "下一步";
+"general.previous.button" = "上一步";
+"general.start.using.button" = "開始使用";
+
+/* Settings */
 "settings.view.title" = "設置";
 "settings.view.model.selection.label" = "模型選擇";
 "settings.view.model.downloaded.status" = "(已下載)";
@@ -22,12 +69,13 @@
 "settings.view.audio.input.device.label" = "音頻輸入設備";
 "settings.view.no.audio.device.available.message" = "沒有可用的音頻輸入設備，請連接麥克風或其他音頻輸入設備。";
 "settings.view.transcription.language.label" = "轉錄語言";
-"settings.view.app.language.label" = "應用語言";
-"general.save.button" = "保存";
+"settings.view.app.language.label" = "應用程式語言";
+
+/* Tutorial */
 "tutorial.step1.title" = "歡迎使用 VocalText";
 "tutorial.step1.description" = "VocalText 是一款語音轉文字工具，可以將您的語音即時轉換為文字。";
 "tutorial.step2.title" = "開始錄音";
-"tutorial.step2.description" = "點擊咪高峰按鈕開始錄音。錄音時，您會看到即時的音頻波形顯示。";
+"tutorial.step2.description" = "點擊麥克風按鈕開始錄音。錄音時，您會看到即時的音頻波形顯示。";
 "tutorial.step3.title" = "查看轉錄結果";
 "tutorial.step3.description" = "錄音結束後，VocalText 會自動將語音轉換為文字並顯示在螢幕上。您可以點擊文字複製到剪貼簿。";
 "tutorial.step4.title" = "設定和自訂";
