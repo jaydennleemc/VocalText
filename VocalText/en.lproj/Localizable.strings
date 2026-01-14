@@ -18,22 +18,35 @@
 /* Error Messages */
 "error.audio.noDevice" = "No audio input device detected, please connect a microphone or other audio input device";
 "error.audio.permissionDenied" = "Microphone permission denied";
-"error.audio.engineFailed" = "Audio engine initialization failed";
+"error.audio.permissionRestricted" = "Microphone permission restricted";
+"error.audio.engineFailed" = "Audio engine failed: %@";
 "error.audio.processingFailed" = "Audio processing failed: %@";
 "error.recording.startFailed" = "Recording start failed: %@";
+"error.recording.failed" = "Recording failed: %@";
 "error.network.notConnected" = "No internet connection";
 "error.network.timeout" = "Connection timeout";
 "error.network.serverNotFound" = "Server not found";
 "error.network.generic" = "Network error: %@";
+"error.model.notFound" = "Model not found: %@";
 "error.transcription.failed" = "Transcription failed: %@";
 "error.transcription.emptyResult" = "No audio data recorded";
-"error.file.notFound" = "Audio file not found";
-"error.file.empty" = "Audio file is empty";
+"error.transcription.invalidFormat" = "Invalid transcription format";
+"error.file.notFound" = "Audio file not found: %@";
+"error.file.empty" = "Audio file is empty: %@";
+"error.file.writeFailed" = "File write failed: %@";
 "error.generic.unknown" = "Unknown error occurred";
-"error.generic.invalidState" = "Audio engine not initialized";
+"error.generic.invalidState" = "Invalid state: %@";
 
 /* Status Messages */
 "status.device.unknown" = "Unknown device";
+
+/* Action Suggestions */
+"action.requestPermission" = "Request permission";
+"action.openSettings" = "Open system settings";
+"action.checkConnection" = "Check network connection";
+"action.connectDevice" = "Connect audio device";
+"action.retryDownload" = "Retry download";
+"action.retry" = "Retry";
 
 /* UI Elements */
 "main.view.checking.model.status" = "Checking model status...";
