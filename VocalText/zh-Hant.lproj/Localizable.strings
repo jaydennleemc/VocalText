@@ -18,22 +18,35 @@
 /* Error Messages */
 "error.audio.noDevice" = "未檢測到音頻輸入設備，請連接麥克風或其他音頻輸入設備";
 "error.audio.permissionDenied" = "麥克風權限被拒絕";
-"error.audio.engineFailed" = "音頻引擎初始化失敗";
+"error.audio.permissionRestricted" = "麥克風權限受限";
+"error.audio.engineFailed" = "音頻引擎失敗: %@";
 "error.audio.processingFailed" = "音頻處理失敗: %@";
 "error.recording.startFailed" = "錄音啟動失敗: %@";
+"error.recording.failed" = "錄音失敗: %@";
 "error.network.notConnected" = "無網絡連接";
 "error.network.timeout" = "連接超時";
 "error.network.serverNotFound" = "找不到伺服器";
 "error.network.generic" = "網絡錯誤: %@";
+"error.model.notFound" = "模型未找到: %@";
 "error.transcription.failed" = "轉錄失敗: %@";
 "error.transcription.emptyResult" = "沒有錄製到音頻數據";
-"error.file.notFound" = "音頻文件不存在";
-"error.file.empty" = "音頻文件為空";
+"error.transcription.invalidFormat" = "轉錄格式無效";
+"error.file.notFound" = "音頻文件未找到: %@";
+"error.file.empty" = "音頻文件為空: %@";
+"error.file.writeFailed" = "文件寫入失敗: %@";
 "error.generic.unknown" = "發生未知錯誤";
-"error.generic.invalidState" = "音頻引擎未初始化";
+"error.generic.invalidState" = "無效狀態: %@";
 
 /* Status Messages */
 "status.device.unknown" = "未知設備";
+
+/* Action Suggestions */
+"action.requestPermission" = "請求權限";
+"action.openSettings" = "打開系統設置";
+"action.checkConnection" = "檢查網絡連接";
+"action.connectDevice" = "連接音頻設備";
+"action.retryDownload" = "重試下載";
+"action.retry" = "重試";
 
 /* UI Elements */
 "main.view.checking.model.status" = "正在檢查模型狀態...";
@@ -85,3 +98,17 @@
 "tutorial.previous.button" = "上一步";
 "tutorial.start.using.button" = "開始使用";
 "tutorial.next.button" = "下一步";
+
+/* Language Names for Transcription */
+"language.zh" = "中文";
+"language.en" = "English";
+"language.ja" = "日本語";
+"language.ko" = "한국어";
+"language.fr" = "Français";
+"language.de" = "Deutsch";
+"language.es" = "Español";
+
+/* Language Names for UI */
+"ui.language.en" = "English";
+"ui.language.zh-Hans" = "简体中文";
+"ui.language.zh-Hant" = "繁體中文";

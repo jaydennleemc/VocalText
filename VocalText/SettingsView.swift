@@ -17,18 +17,18 @@ struct SettingsView: View {
 
     let models = ["tiny", "base", "small", "medium", "large-v3"]
     let languages = [
-        ("zh", "中文"),
-        ("en", "English"),
-        ("ja", "日本語"),
-        ("ko", "한국어"),
-        ("fr", "Français"),
-        ("de", "Deutsch"),
-        ("es", "Español")
+        ("zh", NSLocalizedString("language.zh", comment: "Chinese")),
+        ("en", NSLocalizedString("language.en", comment: "English")),
+        ("ja", NSLocalizedString("language.ja", comment: "Japanese")),
+        ("ko", NSLocalizedString("language.ko", comment: "Korean")),
+        ("fr", NSLocalizedString("language.fr", comment: "French")),
+        ("de", NSLocalizedString("language.de", comment: "German")),
+        ("es", NSLocalizedString("language.es", comment: "Spanish"))
     ]
     let uiLanguages = [
-        ("en", "English"),
-        ("zh-Hans", "简体中文"),
-        ("zh-Hant", "繁體中文")
+        ("en", NSLocalizedString("ui.language.en", comment: "English UI")),
+        ("zh-Hans", NSLocalizedString("ui.language.zh-Hans", comment: "Simplified Chinese UI")),
+        ("zh-Hant", NSLocalizedString("ui.language.zh-Hant", comment: "Traditional Chinese UI"))
     ]
     
     init(isPresented: Binding<Bool>) {
@@ -181,8 +181,10 @@ struct SettingsView: View {
                         NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
                     }
                     
-                    print("设置已保存 - 模型: \(selectedModel), 设备索引: \(selectedDeviceIndex), 语言: \(selectedLanguage)")
-                    
+                    #if DEBUG
+                    print("Settings saved - Model: \(selectedModel), Device Index: \(selectedDeviceIndex), Language: \(selectedLanguage)")
+                    #endif
+
                     isPresented = false
                 }
                 .keyboardShortcut(.defaultAction)

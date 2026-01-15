@@ -22,6 +22,15 @@ class AudioTranscriber: NSObject, ObservableObject {
     private var selectedDeviceID: AudioDeviceID? // 存储选择的音频设备ID
     private var deviceMonitoringTimer: Timer? // 用于存储设备监控定时器
     private var recordingTimer: Timer? // 用于存储录音计时器
+
+    // 临时文件管理
+    private var audioFileURL: URL?
+    private var audioWriter: AVAudioFile?
+
+    #if DEBUG
+    private var memoryMonitorTimer: Timer?
+    private var baselineMemory: Double = 0.0
+    #endif
     
     @Published var isRecording = false
     @Published var isTranscribing = false // 添加转录状态
@@ -40,6 +49,8 @@ class AudioTranscriber: NSObject, ObservableObject {
     var isModelDownloaded: Bool {
         return modelDownloaded
     }
+
+    var delegate: AudioTranscriberDelegate?
     
     override init() {
         super.init()
@@ -57,13 +68,19 @@ class AudioTranscriber: NSObject, ObservableObject {
             // 在iOS上使用playAndRecord类别以支持录音和播放
             try session.setCategory(.playAndRecord, mode: .default)
             try session.setActive(true, options: [.notifyOthersOnDeactivation])
+            #if DEBUG
             print("音頻會話設置完成")
+            #endif
         } catch {
+            #if DEBUG
             print("音頻會話設置失敗: \(error)")
+            #endif
         }
         #endif
         // macOS上不需要特别配置AVAudioSession
+        #if DEBUG
         print("音頻會話設置完成")
+        #endif
     }
     
     // 监听音频设备变化
@@ -81,7 +98,9 @@ class AudioTranscriber: NSObject, ObservableObject {
     
     func setModel(_ model: String) {
         currentModel = model.lowercased()
+        #if DEBUG
         print("模型已設置為: \(currentModel)")
+        #endif
     }
     
     func isModelAlreadyDownloaded(model: String) -> Bool {
@@ -89,7 +108,9 @@ class AudioTranscriber: NSObject, ObservableObject {
         let modelPath = getModelPath(for: model)
         let fileManager = FileManager.default
         let exists = fileManager.fileExists(atPath: modelPath)
+        #if DEBUG
         print("模型 \(model) 是否存在: \(exists) at path: \(modelPath)")
+        #endif
         
         // 检查模型目录中是否包含必要的文件
         if exists {
@@ -97,11 +118,15 @@ class AudioTranscriber: NSObject, ObservableObject {
             for file in requiredFiles {
                 let filePath = "\(modelPath)/\(file)"
                 if !fileManager.fileExists(atPath: filePath) {
+                    #if DEBUG
                     print("模型 \(model) 缺少必要文件: \(file)")
+                    #endif
                     return false
                 }
             }
+            #if DEBUG
             print("模型 \(model) 已完整下載")
+            #endif
             return true
         }
         
@@ -117,7 +142,9 @@ class AudioTranscriber: NSObject, ObservableObject {
         // 获取模型路径
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
         let modelPath = "\(documentsPath)/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-\(model)"
+        #if DEBUG
         print("檢查模型路徑: \(modelPath)")
+        #endif
         return modelPath
     }
     
@@ -160,43 +187,61 @@ class AudioTranscriber: NSObject, ObservableObject {
             NotificationCenter.default.post(name: Notification.Name("ModelDownloadFinished"), object: nil)
             
             // 添加调试日志
+            #if DEBUG
             print("模型下載完成，modelDownloaded = \(modelDownloaded)")
+            #endif
             return true
         } catch let error as NSError {
+            #if DEBUG
             print("模型下載失敗: \(error)")
+            #endif
             isDownloading = false
             downloadStatus = String(format: NSLocalizedString("model.status.download.failed", comment: "Model download failed"), error.localizedDescription)
             modelDownloaded = false // 确保标记为未下载
-            
+
             // 发送下载完成通知（即使是失败的情况）
             NotificationCenter.default.post(name: Notification.Name("ModelDownloadFinished"), object: nil)
-            
-            // 提供更详细的错误信息
+
+            // 提供更详细的错误信息并通过delegate报告
+            let vocalTextError: VocalTextError
             if error.domain == NSURLErrorDomain {
                 switch error.code {
                 case NSURLErrorNotConnectedToInternet:
                     downloadStatus = NSLocalizedString("error.network.notConnected", comment: "No internet connection")
+                    vocalTextError = .networkNotConnected
                 case NSURLErrorTimedOut:
                     downloadStatus = NSLocalizedString("error.network.timeout", comment: "Connection timeout")
+                    vocalTextError = .networkTimeout
                 case NSURLErrorCannotFindHost:
                     downloadStatus = NSLocalizedString("error.network.serverNotFound", comment: "Server not found")
+                    vocalTextError = .networkServerNotFound
                 default:
                     downloadStatus = String(format: NSLocalizedString("error.network.generic", comment: "Network error"), error.localizedDescription)
+                    vocalTextError = .networkGeneric(underlying: error)
                 }
             } else {
                 downloadStatus = String(format: NSLocalizedString("model.status.download.failed", comment: "Model download failed"), error.localizedDescription)
+                vocalTextError = .modelDownloadFailed(reason: error.localizedDescription)
             }
-            
+
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: vocalTextError)
+
             return false
         } catch {
+            #if DEBUG
             print("模型下載失敗: \(error)")
+            #endif
             isDownloading = false
             downloadStatus = NSLocalizedString("error.generic.unknown", comment: "Unknown error")
             modelDownloaded = false // 确保标记为未下载
-            
+
             // 发送下载完成通知（即使是失败的情况）
             NotificationCenter.default.post(name: Notification.Name("ModelDownloadFinished"), object: nil)
-            
+
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: .unknownError)
+
             return false
         }
     }
@@ -205,6 +250,8 @@ class AudioTranscriber: NSObject, ObservableObject {
         // 检查是否有音频输入设备
         if !hasAvailableAudioInputDevices() {
             transcript = NSLocalizedString("error.audio.noDevice", comment: "No audio input device detected")
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: .audioDeviceUnavailable)
             return
         }
         
@@ -212,6 +259,11 @@ class AudioTranscriber: NSObject, ObservableObject {
         recordingTime = 0.0 // 重置录音时间
         transcript = NSLocalizedString("recording.state.recording", comment: "Recording")
         audioData = Data() // 重置音频数据
+        
+        #if DEBUG
+        // 开始内存监控（仅在调试模式）
+        startMemoryMonitoring()
+        #endif
         
         // 启动录音计时器
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
@@ -249,12 +301,16 @@ class AudioTranscriber: NSObject, ObservableObject {
     
     func setLanguage(_ language: String) {
         selectedLanguage = language
+        #if DEBUG
         print("語言已設置為: \(selectedLanguage)")
+        #endif
         
         // 添加调试信息，查看 WhisperKit 是否支持语言设置
         if let whisperKit = whisperKit {
             // 尝试查看 whisperKit 是否有语言相关的属性或方法
+            #if DEBUG
             print("WhisperKit 實例: \(whisperKit)")
+            #endif
         }
     }
     
@@ -264,7 +320,9 @@ class AudioTranscriber: NSObject, ObservableObject {
         guard !isWhisperKitPreloading && whisperKit == nil else { return }
         
         isWhisperKitPreloading = true
+        #if DEBUG
         print("開始預加載WhisperKit...")
+        #endif
         
         do {
             // 根据选择的模型初始化WhisperKit
@@ -274,10 +332,14 @@ class AudioTranscriber: NSObject, ObservableObject {
             await MainActor.run {
                 self.whisperKit = loadedWhisperKit
                 self.isWhisperKitPreloading = false
+                #if DEBUG
                 print("WhisperKit 預加載完成")
+                #endif
             }
         } catch {
+            #if DEBUG
             print("WhisperKit 預加載失敗: \(error)")
+            #endif
             await MainActor.run {
                 self.isWhisperKitPreloading = false
             }
@@ -302,18 +364,24 @@ class AudioTranscriber: NSObject, ObservableObject {
             // 注意：WhisperKitConfig 可能不直接支持 language 参数
             // 我们需要在转录时指定语言
             whisperKit = try await WhisperKit(config)
+            #if DEBUG
             print("WhisperKit 初始化成功，使用模型: \(currentModel)")
+            #endif
             
             // 初始化完成后开始录音
             await MainActor.run {
                 self.startAudioEngine()
             }
         } catch {
+            #if DEBUG
             print("WhisperKit 初始化失敗: \(error)")
+            #endif
             await MainActor.run {
                 self.transcript = String(format: NSLocalizedString("model.status.load.failed", comment: "Model failed to load"), error.localizedDescription)
                 self.isRecording = false
             }
+            // 通过delegate报告错误
+            self.delegate?.audioTranscriber(self, didEncounterError: .modelLoadFailed(reason: error.localizedDescription))
         }
     }
     
@@ -349,10 +417,18 @@ class AudioTranscriber: NSObject, ObservableObject {
         let inputFormat = inputNode.outputFormat(forBus: bus)
         audioFormat = inputFormat // 保存音频格式
         
+        #if DEBUG
         print("音頻格式: \(inputFormat)")
+        #endif
+        #if DEBUG
         print("採樣率: \(inputFormat.sampleRate)")
+        #endif
+        #if DEBUG
         print("聲道數: \(inputFormat.channelCount)")
+        #endif
+        #if DEBUG
         print("位深度: \(inputFormat.settings[AVLinearPCMBitDepthKey] ?? "Unknown")")
+        #endif
         
         // 重置音频数据
         audioData = Data()
@@ -370,19 +446,25 @@ class AudioTranscriber: NSObject, ObservableObject {
             
             // 打印调试信息
             DispatchQueue.main.async {
+                #if DEBUG
                 print("接收到音頻數據: \(buffer.frameLength) 幀, 音量: \(volume)")
+                #endif
                 self.volumeLevel = volume // 更新音量级别
             }
             
             // 获取音频数据
             if let audioData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
                 DispatchQueue.main.async {
+                    #if DEBUG
                     print("音頻數據大小: \(audioData.count) 字節")
+                    #endif
                     self.audioData.append(audioData)
                 }
             } else {
                 DispatchQueue.main.async {
+                    #if DEBUG
                     print("无法获取音频数据")
+                    #endif
                 }
             }
         }
@@ -394,29 +476,41 @@ class AudioTranscriber: NSObject, ObservableObject {
             // 准备并启动音频引擎
             audioEngine.prepare()
             try audioEngine.start()
+            #if DEBUG
             print("音频录制已开始")
+            #endif
         } catch {
+            #if DEBUG
             print("无法启动音频引擎: \(error)")
+            #endif
             isRecording = false
             transcript = String(format: NSLocalizedString("error.recording.startFailed", comment: "Recording start failed"), error.localizedDescription)
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: .audioEngineFailed(reason: error.localizedDescription))
         }
     }
     
     // 将AVAudioPCMBuffer转换为Data
     private func audioBufferToData(_ buffer: AVAudioPCMBuffer, channelCount: Int, frameLength: Int) -> Data? {
         guard let channelData = buffer.floatChannelData else { 
+            #if DEBUG
             print("无法获取channelData")
+            #endif
             return nil 
         }
         
         // 检查数据有效性
         if frameLength == 0 {
+            #if DEBUG
             print("帧长度为0")
+            #endif
             return nil
         }
         
         // 打印缓冲区信息
+        #if DEBUG
         print("缓冲区信息: 帧长度=\(frameLength), 通道数=\(channelCount)")
+        #endif
         
         // 计算单声道数据大小（我们只处理第一个声道）
         let byteSize = frameLength * MemoryLayout<Float>.size
@@ -465,41 +559,62 @@ class AudioTranscriber: NSObject, ObservableObject {
     }
     
     func stopRecording() {
+        // 使用defer确保资源清理
+        defer {
+            #if DEBUG
+            print("✅ stopRecording cleanup completed")
+            #endif
+        }
+
         isRecording = false
         recordingTime = 0.0 // 重置录音时间
-        
-        // 停止录音计时器
+
+        #if DEBUG
+        // 停止内存监控
+        stopMemoryMonitoring()
+        #endif
+
+        // 1. 停止并清理录音计时器
         recordingTimer?.invalidate()
         recordingTimer = nil
-        
-        // 发送录音停止通知
+
+        // 2. 发送录音停止通知
         NotificationCenter.default.post(name: Notification.Name("RecordingStopped"), object: nil)
-        
-        guard let audioEngine = audioEngine else { 
-            transcript = NSLocalizedString("error.generic.invalidState", comment: "Audio engine not initialized")
-            return 
+
+        // 3. 停止音频引擎并清理资源
+        if let audioEngine = audioEngine {
+            if audioEngine.isRunning {
+                audioEngine.stop()
+            }
+
+            // 移除所有tap
+            audioEngine.inputNode.removeTap(onBus: 0)
+
+            #if DEBUG
+            print("✅ Audio engine stopped and tap removed")
+            #endif
         }
-        
-        // 停止音频引擎
-        audioEngine.stop()
-        
-        // 移除所有tap
-        audioEngine.inputNode.removeTap(onBus: 0)
-        
-        // 重置音频引擎
+
+        // 4. 立即释放音频引擎
         self.audioEngine = nil
-        
+
+        #if DEBUG
         print("音頻錄製已停止")
         print("總音頻數據大小: \(audioData.count) 字節")
+        #endif
+
         transcript = NSLocalizedString("recording.state.processing", comment: "Processing recording")
-        
-        // 只有在有音频数据时才处理
-        if !audioData.isEmpty {
-            // 处理音频数据
-            processAudio()
-        } else {
+
+        // 5. 检查音频数据并处理
+        guard !audioData.isEmpty else {
             transcript = NSLocalizedString("error.transcription.emptyResult", comment: "No audio data recorded")
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: .transcriptionEmptyResult)
+            return
         }
+
+        // 6. 处理音频数据
+        processAudio()
     }
     
     private func processAudio() {
@@ -507,39 +622,76 @@ class AudioTranscriber: NSObject, ObservableObject {
             transcript = NSLocalizedString("error.transcription.emptyResult", comment: "No audio data recorded")
             return
         }
-        
+
         // 将音频数据保存到临时文件
         Task {
-            do {
-                let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("recording.wav")
-                print("音频文件路径: \(tempURL.path)")
-                try saveAudioDataToWAV(audioData, format: audioFormat, url: tempURL)
-                
-                // 检查保存的文件大小
-                let fileAttributes = try FileManager.default.attributesOfItem(atPath: tempURL.path)
-                if let fileSize = fileAttributes[.size] as? NSNumber {
-                    print("保存的文件大小: \(fileSize) 字节")
+            var tempURL: URL?
+
+            // 使用defer确保临时文件被清理
+            defer {
+                if let url = tempURL,
+                   FileManager.default.fileExists(atPath: url.path) {
+                    do {
+                        try FileManager.default.removeItem(at: url)
+                        #if DEBUG
+                        print("✅ Cleaned up temp file: \(url.path)")
+                        #endif
+                    } catch {
+                        #if DEBUG
+                        print("❌ Failed to clean up temp file: \(error)")
+                        #endif
+                    }
                 }
-                
+            }
+
+            do {
+                // 使用新的安全临时文件创建方法
+                tempURL = try createSecureTempFile()
+                guard let tempFileURL = tempURL else {
+                    throw NSError(domain: "AudioTranscriber", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create temp file"])
+                }
+
+                #if DEBUG
+                print("音频文件路径: \(tempFileURL.path)")
+                #endif
+
+                try saveAudioDataToWAV(audioData, format: audioFormat, url: tempFileURL)
+
+                // 检查保存的文件大小
+                let fileAttributes = try FileManager.default.attributesOfItem(atPath: tempFileURL.path)
+                if let fileSize = fileAttributes[.size] as? NSNumber {
+                    #if DEBUG
+                    print("保存的文件大小: \(fileSize) 字节")
+                    #endif
+                }
+
                 // 检查文件是否存在且不为空
-                if FileManager.default.fileExists(atPath: tempURL.path) {
-                    let fileData = try Data(contentsOf: tempURL)
+                if FileManager.default.fileExists(atPath: tempFileURL.path) {
+                    let fileData = try Data(contentsOf: tempFileURL)
+                    #if DEBUG
                     print("实际文件大小: \(fileData.count) 字节")
-                    
+                    #endif
+
                     // 验证WAV文件头
                     if fileData.count >= 44 {
                         let header = fileData.subdata(in: 0..<44)
+                        #if DEBUG
                         print("WAV文件头: \(header.map { String(format: "%02x", $0) }.joined(separator: " "))")
+                        #endif
                     }
                 }
-                
+
                 // 使用WhisperKit进行转录
-                await transcribeAudio(audioFilePath: tempURL.path)
+                await transcribeAudio(audioFilePath: tempFileURL.path)
             } catch {
+                #if DEBUG
                 print("音频处理失败: \(error)")
+                #endif
                 await MainActor.run {
                     self.transcript = String(format: NSLocalizedString("error.audio.processingFailed", comment: "Audio processing failed"), error.localizedDescription)
                 }
+                // 通过delegate报告错误
+                self.delegate?.audioTranscriber(self, didEncounterError: .audioProcessingFailed(reason: error.localizedDescription))
             }
         }
     }
@@ -550,15 +702,27 @@ class AudioTranscriber: NSObject, ObservableObject {
         let channels = 1  // 强制使用单声道以确保兼容性
         let bitDepth = 16 // 强制使用16位深度以兼容Whisper
         
+        #if DEBUG
         print("保存音频数据到WAV文件:")
+        #endif
+        #if DEBUG
         print("  数据大小: \(data.count) 字节")
+        #endif
+        #if DEBUG
         print("  采样率: \(sampleRate)")
+        #endif
+        #if DEBUG
         print("  声道数: \(channels)")
+        #endif
+        #if DEBUG
         print("  位深度: \(bitDepth)")
+        #endif
         
         // 将浮点数据转换为16位PCM数据
         let convertedData = convertFloatToPCM16(data)
+        #if DEBUG
         print("转换后数据大小: \(convertedData.count) 字节")
+        #endif
         
         // 创建WAV文件头
         let header = createWAVHeader(
@@ -582,13 +746,19 @@ class AudioTranscriber: NSObject, ObservableObject {
         }
         
         try fileData.write(to: url)
+        #if DEBUG
         print("音频文件已保存到: \(url.path)")
+        #endif
+        #if DEBUG
         print("文件总大小: \(fileData.count) 字节")
+        #endif
         
         // 验证文件是否正确创建
         if FileManager.default.fileExists(atPath: url.path) {
             let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+            #if DEBUG
             print("验证文件大小: \(attrs[.size] ?? "Unknown") 字节")
+            #endif
         }
     }
     
@@ -596,7 +766,9 @@ class AudioTranscriber: NSObject, ObservableObject {
     private func convertFloatToPCM16(_ floatData: Data) -> Data {
         // 如果数据为空，返回空数据
         guard !floatData.isEmpty else {
+            #if DEBUG
             print("输入数据为空")
+            #endif
             return Data()
         }
         
@@ -605,7 +777,9 @@ class AudioTranscriber: NSObject, ObservableObject {
         
         // 检查数据大小是否正确
         if floatData.count % MemoryLayout<Float>.size != 0 {
+            #if DEBUG
             print("警告: 数据大小不是Float大小的整数倍")
+            #endif
         }
         
         // 创建一个新的Data对象来存储转换后的16位数据
@@ -618,7 +792,9 @@ class AudioTranscriber: NSObject, ObservableObject {
             
             // 确保不会越界
             if offset + MemoryLayout<Float>.size > floatData.count {
+                #if DEBUG
                 print("警告: 数据越界 at index \(i)")
+                #endif
                 break
             }
             
@@ -640,7 +816,9 @@ class AudioTranscriber: NSObject, ObservableObject {
             int16Data.append(bytes)
         }
         
+        #if DEBUG
         print("转换完成: \(floatCount) 个浮点数 -> \(int16Data.count) 字节")
+        #endif
         return int16Data
     }
     
@@ -718,19 +896,27 @@ class AudioTranscriber: NSObject, ObservableObject {
         }
         
         guard let whisperKit = whisperKit else {
+            #if DEBUG
             print("WhisperKit 未初始化")
+            #endif
             await MainActor.run {
                 self.transcript = NSLocalizedString("model.status.load.failed", comment: "Model failed to load")
             }
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: .modelLoadFailed(reason: "WhisperKit not initialized"))
             return
         }
         
         // 检查文件是否存在
         if !FileManager.default.fileExists(atPath: audioFilePath) {
+            #if DEBUG
             print("音频文件不存在: \(audioFilePath)")
+            #endif
             await MainActor.run {
                 self.transcript = NSLocalizedString("error.file.notFound", comment: "Audio file not found")
             }
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: .fileNotFound(path: audioFilePath))
             return
         }
         
@@ -738,20 +924,28 @@ class AudioTranscriber: NSObject, ObservableObject {
         do {
             let fileAttributes = try FileManager.default.attributesOfItem(atPath: audioFilePath)
             if let fileSize = fileAttributes[.size] as? NSNumber {
+                #if DEBUG
                 print("轉錄文件大小: \(fileSize) 字節")
+                #endif
                 if fileSize.intValue == 0 {
                     await MainActor.run {
                         self.transcript = NSLocalizedString("error.file.empty", comment: "Audio file is empty")
                     }
+                    // 通过delegate报告错误
+                    delegate?.audioTranscriber(self, didEncounterError: .fileEmpty(path: audioFilePath))
                     return
                 }
             }
         } catch {
+            #if DEBUG
             print("無法獲取文件信息: \(error)")
+            #endif
         }
         
         do {
+            #if DEBUG
             print("開始轉錄音頻文件: \(audioFilePath)")
+            #endif
             
             // 使用 DecodingOptions 配置语言
             let decodingOptions = DecodingOptions(
@@ -760,7 +954,9 @@ class AudioTranscriber: NSObject, ObservableObject {
                 sampleLength: 224
             )
             
+            #if DEBUG
             print("使用語言: \(selectedLanguage)")
+            #endif
             
             // 调用 transcribe 方法并传入解码选项
             let result = try await whisperKit.transcribe(
@@ -768,7 +964,9 @@ class AudioTranscriber: NSObject, ObservableObject {
                 decodeOptions: decodingOptions
             )
             
+            #if DEBUG
             print("轉錄完成")
+            #endif
             
             await MainActor.run {
                 // 处理转录结果
@@ -795,13 +993,19 @@ class AudioTranscriber: NSObject, ObservableObject {
                 }
                 
                 self.transcript = extractedText
+                #if DEBUG
                 print("轉錄結果: \(extractedText)")
+                #endif
             }
         } catch {
+            #if DEBUG
             print("转录失败: \(error)")
+            #endif
             await MainActor.run {
                 self.transcript = String(format: NSLocalizedString("error.transcription.failed", comment: "Transcription failed"), error.localizedDescription)
             }
+            // 通过delegate报告错误
+            delegate?.audioTranscriber(self, didEncounterError: .transcriptionFailed(reason: error.localizedDescription))
         }
     }
     
@@ -911,20 +1115,182 @@ class AudioTranscriber: NSObject, ObservableObject {
     // 设置选择的音频设备
     func setSelectedDevice(index: Int) {
         guard index < audioDevices.count else { 
+            #if DEBUG
             print("无效的设备索引: \(index), 设备数量: \(audioDevices.count)")
+            #endif
             return 
         }
         selectedDeviceIndex = index
         selectedDeviceID = audioDevices[index].id
+        #if DEBUG
         print("已选择设备索引: \(index), 设备ID: \(audioDevices[index].id), 设备名称: \(audioDevices[index].name)")
+        #endif
         UserDefaults.standard.set(index, forKey: "SelectedDeviceIndex")
     }
-    
+
+    // MARK: - Memory Monitoring (Debug Only)
+
+    #if DEBUG
+    func startMemoryMonitoring() {
+        // 获取初始内存 - 在主线程同步执行以避免actor隔离问题
+        var initialMemory: Double = 0.0
+        let semaphore = DispatchSemaphore(value: 0)
+
+        logMemoryUsage { memory in
+            initialMemory = memory
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        // 在主线程设置基线
+        self.baselineMemory = initialMemory
+
+        // 每 5 秒监控一次 - 使用RunLoop在主线程
+        DispatchQueue.main.async { [weak self] in
+            self?.memoryMonitorTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+                guard let self = self else { return }
+                self.logMemoryUsage { currentMemory in
+                    // 直接在主线程打印，避免actor隔离
+                    let delta = currentMemory - self.baselineMemory
+                    print("📊 Memory: \(String(format: "%.2f", currentMemory)) MB (Δ: \(String(format: "%.2f", delta)) MB)")
+
+                    // 警告如果增长超过 100MB
+                    if delta > 100.0 {
+                        print("⚠️ WARNING: Memory grew by \(String(format: "%.2f", delta)) MB!")
+                    }
+                }
+            }
+        }
+    }
+
+    func stopMemoryMonitoring() {
+        // 在主线程执行定时器操作
+        DispatchQueue.main.async { [weak self] in
+            self?.memoryMonitorTimer?.invalidate()
+            self?.memoryMonitorTimer = nil
+            print("📊 Memory monitoring stopped")
+        }
+    }
+
+    private func logMemoryUsage(completion: @escaping (Double) -> Void) {
+        var taskInfo = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info>.size) / 4
+
+        let result: kern_return_t = withUnsafeMutablePointer(to: &taskInfo) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+
+        if result == KERN_SUCCESS {
+            let memoryMB = Double(taskInfo.phys_footprint) / 1024.0 / 1024.0
+            completion(memoryMB)
+        } else {
+            completion(0.0)
+        }
+    }
+    #endif
+
+    // MARK: - Temporary File Management
+
+    private func createSecureTempFile() throws -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vocaltext")
+
+        // 创建目录
+        try FileManager.default.createDirectory(
+            at: tempDir,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+
+        // 创建唯一文件名
+        let fileName = "recording_\(UUID().uuidString).wav"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+
+        self.audioFileURL = fileURL
+
+        #if DEBUG
+        print("✅ Created temp file: \(fileURL.path)")
+        #endif
+
+        return fileURL
+    }
+
+
+
+
     // 移除监听器
     deinit {
+        #if DEBUG
+        print("🔄 AudioTranscriber deinit called")
+        #endif
+
+        // 1. 停止内存监控（调试模式，内联实现）
+        #if DEBUG
+        memoryMonitorTimer?.invalidate()
+        memoryMonitorTimer = nil
+        print("📊 Memory monitoring stopped")
+        #endif
+
+        // 2. 停止所有定时器
         deviceMonitoringTimer?.invalidate()
         deviceMonitoringTimer = nil
+
         recordingTimer?.invalidate()
         recordingTimer = nil
+
+        // 3. 清理临时文件（内联实现，避免actor隔离问题）
+        if let url = audioFileURL,
+           FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try FileManager.default.removeItem(at: url)
+                #if DEBUG
+                print("✅ Cleaned up temp file: \(url.path)")
+                #endif
+            } catch {
+                #if DEBUG
+                print("❌ Failed to clean up temp file: \(error)")
+                #endif
+            }
+        }
+
+        // 4. 清理整个临时目录（内联实现）
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("vocaltext")
+        do {
+            if FileManager.default.fileExists(atPath: tempDir.path) {
+                try FileManager.default.removeItem(at: tempDir)
+                #if DEBUG
+                print("✅ Cleaned up entire temp directory: \(tempDir.path)")
+                #endif
+            }
+        } catch {
+            #if DEBUG
+            print("❌ Failed to clean up temp directory: \(error)")
+            #endif
+        }
+
+        // 5. 清理音频数据
+        audioData.removeAll()
+        audioData = Data()
+
+        // 6. 释放 WhisperKit
+        whisperKit = nil
+
+        // 7. 停止并清理音频引擎
+        if let engine = audioEngine {
+            if engine.isRunning {
+                engine.stop()
+            }
+            engine.inputNode.removeTap(onBus: 0)
+        }
+        audioEngine = nil
+
+        // 8. 清理音频写入器
+        audioWriter = nil
+
+        #if DEBUG
+        print("✅ AudioTranscriber resources cleaned up")
+        #endif
     }
 }

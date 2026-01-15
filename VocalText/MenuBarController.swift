@@ -9,17 +9,19 @@ import Cocoa
 import SwiftUI
 import Combine
 
-class MenuBarController: NSObject {
+class MenuBarController: NSObject, MainViewDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var hostingController: NSHostingController<AnyView>!
-    
+
     private var cancellables = Set<AnyCancellable>()
+    private var keyboardShortcutManager: KeyboardShortcutManager!
 
     override init() {
         super.init()
         setupMenuBar()
         setupLocalizationObserver()
+        setupKeyboardShortcuts()
     }
     
     private func setupMenuBar() {
@@ -52,7 +54,12 @@ class MenuBarController: NSObject {
             }
             .store(in: &cancellables)
     }
-    
+
+    private func setupKeyboardShortcuts() {
+        keyboardShortcutManager = KeyboardShortcutManager(menuBarController: self)
+        keyboardShortcutManager.setupAppMenuShortcuts()
+    }
+
     private func updateLocale() {
         let language = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en"
         hostingController.rootView = AnyView(MainView().environment(\.locale, .init(identifier: language)))
@@ -95,5 +102,64 @@ class MenuBarController: NSObject {
     
     @objc private func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    // MARK: - MainViewDelegate Methods
+
+    func toggleRecording() {
+        // 通知 MainView 切换录音状态
+        NotificationCenter.default.post(name: Notification.Name("ToggleRecording"), object: nil)
+    }
+
+    func copyTranscript() {
+        // 通知 MainView 复制转录文本
+        NotificationCenter.default.post(name: Notification.Name("CopyTranscript"), object: nil)
+    }
+
+    func openSettings() {
+        // 通知 MainView 打开设置
+        NotificationCenter.default.post(name: Notification.Name("OpenSettings"), object: nil)
+    }
+
+    func closePopover() {
+        // 关闭弹窗
+        if popover.isShown {
+            popover.performClose(nil)
+        }
+    }
+
+    func showTutorial() {
+        // 通知 MainView 显示教程
+        NotificationCenter.default.post(name: Notification.Name("ShowTutorial"), object: nil)
+    }
+
+    func forceRetryDownload() {
+        // 通知 MainView 强制重试下载
+        NotificationCenter.default.post(name: Notification.Name("ForceRetryDownload"), object: nil)
+    }
+
+    deinit {
+        #if DEBUG
+        print("🔄 MenuBarController deinit called")
+        #endif
+
+        // 清理所有观察者
+        cancellables.forEach { $0.cancel() }
+        cancellables.removeAll()
+
+        // 清理状态栏项目
+        if let statusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+
+        // 清理popover和hostingController
+        popover?.contentViewController = nil
+        hostingController?.rootView = AnyView(EmptyView())
+        hostingController = nil
+        popover = nil
+
+        #if DEBUG
+        print("✅ MenuBarController resources cleaned up")
+        #endif
     }
 }

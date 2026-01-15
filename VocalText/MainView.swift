@@ -10,6 +10,367 @@ import AppKit
 import AVFoundation
 import UserNotifications
 
+// MARK: - Error Type System
+
+enum ErrorType {
+    case warning
+    case error
+    case info
+
+    var color: Color {
+        switch self {
+        case .warning: return .orange
+        case .error: return .red
+        case .info: return .blue
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .warning: return "exclamationmark.triangle.fill"
+        case .error: return "xmark.octagon.fill"
+        case .info: return "info.circle.fill"
+        }
+    }
+
+    var backgroundColor: Color {
+        switch self {
+        case .warning: return .orange.opacity(0.1)
+        case .error: return .red.opacity(0.1)
+        case .info: return .blue.opacity(0.1)
+        }
+    }
+
+    var borderColor: Color {
+        switch self {
+        case .warning: return .orange.opacity(0.3)
+        case .error: return .red.opacity(0.3)
+        case .info: return .blue.opacity(0.3)
+        }
+    }
+}
+
+// MARK: - VocalTextError Enum
+
+enum VocalTextError: LocalizedError, Equatable {
+    // 麦克风权限相关
+    case microphonePermissionDenied
+    case microphonePermissionRestricted
+
+    // 网络相关
+    case networkNotConnected
+    case networkTimeout
+    case networkServerNotFound
+    case networkGeneric(underlying: Error)
+
+    // 模型相关
+    case modelDownloadFailed(reason: String)
+    case modelLoadFailed(reason: String)
+    case modelNotFound(model: String)
+
+    // 录音相关
+    case audioDeviceUnavailable
+    case audioEngineFailed(reason: String)
+    case audioRecordingFailed(reason: String)
+    case audioProcessingFailed(reason: String)
+
+    // 转录相关
+    case transcriptionFailed(reason: String)
+    case transcriptionEmptyResult
+    case transcriptionInvalidFormat
+
+    // 文件相关
+    case fileNotFound(path: String)
+    case fileEmpty(path: String)
+    case fileWriteFailed(reason: String)
+
+    // 通用错误
+    case invalidState(description: String)
+    case unknownError
+
+    // MARK: - LocalizedError 协议实现
+
+    var errorDescription: String? {
+        switch self {
+        case .microphonePermissionDenied:
+            return NSLocalizedString("error.audio.permissionDenied", comment: "麦克风权限被拒绝")
+
+        case .microphonePermissionRestricted:
+            return NSLocalizedString("error.audio.permissionRestricted", comment: "麦克风权限受限")
+
+        case .networkNotConnected:
+            return NSLocalizedString("error.network.notConnected", comment: "无网络连接")
+
+        case .networkTimeout:
+            return NSLocalizedString("error.network.timeout", comment: "连接超时")
+
+        case .networkServerNotFound:
+            return NSLocalizedString("error.network.serverNotFound", comment: "找不到服务器")
+
+        case .networkGeneric(let underlying):
+            return String(format: NSLocalizedString("error.network.generic", comment: "网络错误"), underlying.localizedDescription)
+
+        case .modelDownloadFailed(let reason):
+            return String(format: NSLocalizedString("model.status.download.failed", comment: "模型下载失败"), reason)
+
+        case .modelLoadFailed(let reason):
+            return String(format: NSLocalizedString("model.status.load.failed", comment: "模型加载失败"), reason)
+
+        case .modelNotFound(let model):
+            return String(format: NSLocalizedString("error.model.notFound", comment: "模型未找到"), model)
+
+        case .audioDeviceUnavailable:
+            return NSLocalizedString("error.audio.noDevice", comment: "无音频设备")
+
+        case .audioEngineFailed(let reason):
+            return String(format: NSLocalizedString("error.audio.engineFailed", comment: "音频引擎失败"), reason)
+
+        case .audioRecordingFailed(let reason):
+            return String(format: NSLocalizedString("error.recording.failed", comment: "录音失败"), reason)
+
+        case .audioProcessingFailed(let reason):
+            return String(format: NSLocalizedString("error.audio.processingFailed", comment: "音频处理失败"), reason)
+
+        case .transcriptionFailed(let reason):
+            return String(format: NSLocalizedString("error.transcription.failed", comment: "转录失败"), reason)
+
+        case .transcriptionEmptyResult:
+            return NSLocalizedString("error.transcription.emptyResult", comment: "转录结果为空")
+
+        case .transcriptionInvalidFormat:
+            return NSLocalizedString("error.transcription.invalidFormat", comment: "转录格式无效")
+
+        case .fileNotFound(let path):
+            return String(format: NSLocalizedString("error.file.notFound", comment: "文件未找到"), path)
+
+        case .fileEmpty(let path):
+            return String(format: NSLocalizedString("error.file.empty", comment: "文件为空"), path)
+
+        case .fileWriteFailed(let reason):
+            return String(format: NSLocalizedString("error.file.writeFailed", comment: "文件写入失败"), reason)
+
+        case .invalidState(let description):
+            return String(format: NSLocalizedString("error.generic.invalidState", comment: "无效状态"), description)
+
+        case .unknownError:
+            return NSLocalizedString("error.generic.unknown", comment: "未知错误")
+        }
+    }
+
+    // MARK: - 错误级别
+
+    var type: ErrorType {
+        switch self {
+        case .microphonePermissionDenied,
+             .microphonePermissionRestricted,
+             .audioDeviceUnavailable,
+             .invalidState:
+            return .error
+
+        case .networkNotConnected,
+             .networkTimeout,
+             .networkServerNotFound,
+             .modelNotFound,
+             .transcriptionEmptyResult:
+            return .warning
+
+        case .networkGeneric,
+             .modelDownloadFailed,
+             .modelLoadFailed,
+             .audioEngineFailed,
+             .audioRecordingFailed,
+             .audioProcessingFailed,
+             .transcriptionFailed,
+             .transcriptionInvalidFormat,
+             .fileNotFound,
+             .fileEmpty,
+             .fileWriteFailed,
+             .unknownError:
+            return .error
+        }
+    }
+
+    // MARK: - 可恢复性
+
+    var isRecoverable: Bool {
+        switch self {
+        case .microphonePermissionDenied,
+             .microphonePermissionRestricted,
+             .audioDeviceUnavailable:
+            return false // 需要用户操作
+
+        case .networkNotConnected,
+             .networkTimeout,
+             .networkServerNotFound,
+             .networkGeneric:
+            return true // 可重试
+
+        case .modelDownloadFailed,
+             .modelLoadFailed,
+             .modelNotFound:
+            return true // 可重试
+
+        case .audioEngineFailed,
+             .audioRecordingFailed,
+             .audioProcessingFailed:
+            return true // 可重试
+
+        case .transcriptionFailed,
+             .transcriptionEmptyResult,
+             .transcriptionInvalidFormat:
+            return true // 可重试
+
+        case .fileNotFound,
+             .fileEmpty,
+             .fileWriteFailed:
+            return false // 需要修复文件系统
+
+        case .invalidState,
+             .unknownError:
+            return true // 可重试
+        }
+    }
+
+    // MARK: - 操作建议
+
+    var suggestedAction: String? {
+        switch self {
+        case .microphonePermissionDenied:
+            return NSLocalizedString("action.requestPermission", comment: "请求权限")
+
+        case .microphonePermissionRestricted:
+            return NSLocalizedString("action.openSettings", comment: "打开系统设置")
+
+        case .networkNotConnected:
+            return NSLocalizedString("action.checkConnection", comment: "检查网络连接")
+
+        case .audioDeviceUnavailable:
+            return NSLocalizedString("action.connectDevice", comment: "连接音频设备")
+
+        case .modelDownloadFailed,
+             .modelLoadFailed,
+             .modelNotFound:
+            return NSLocalizedString("action.retryDownload", comment: "重试下载")
+
+        default:
+            return NSLocalizedString("action.retry", comment: "重试")
+        }
+    }
+}
+
+// MARK: - Equatable Implementation
+
+func == (lhs: VocalTextError, rhs: VocalTextError) -> Bool {
+    switch (lhs, rhs) {
+    case (.microphonePermissionDenied, .microphonePermissionDenied):
+        return true
+    case (.microphonePermissionRestricted, .microphonePermissionRestricted):
+        return true
+    case (.networkNotConnected, .networkNotConnected):
+        return true
+    case (.networkTimeout, .networkTimeout):
+        return true
+    case (.networkServerNotFound, .networkServerNotFound):
+        return true
+    case (.networkGeneric, .networkGeneric):
+        return true
+    case (.modelDownloadFailed(let lhsReason), .modelDownloadFailed(let rhsReason)):
+        return lhsReason == rhsReason
+    case (.modelLoadFailed(let lhsReason), .modelLoadFailed(let rhsReason)):
+        return lhsReason == rhsReason
+    case (.modelNotFound(let lhsModel), .modelNotFound(let rhsModel)):
+        return lhsModel == rhsModel
+    case (.audioDeviceUnavailable, .audioDeviceUnavailable):
+        return true
+    case (.audioEngineFailed(let lhsReason), .audioEngineFailed(let rhsReason)):
+        return lhsReason == rhsReason
+    case (.audioRecordingFailed(let lhsReason), .audioRecordingFailed(let rhsReason)):
+        return lhsReason == rhsReason
+    case (.audioProcessingFailed(let lhsReason), .audioProcessingFailed(let rhsReason)):
+        return lhsReason == rhsReason
+    case (.transcriptionFailed(let lhsReason), .transcriptionFailed(let rhsReason)):
+        return lhsReason == rhsReason
+    case (.transcriptionEmptyResult, .transcriptionEmptyResult):
+        return true
+    case (.transcriptionInvalidFormat, .transcriptionInvalidFormat):
+        return true
+    case (.fileNotFound(let lhsPath), .fileNotFound(let rhsPath)):
+        return lhsPath == rhsPath
+    case (.fileEmpty(let lhsPath), .fileEmpty(let rhsPath)):
+        return lhsPath == rhsPath
+    case (.fileWriteFailed(let lhsReason), .fileWriteFailed(let rhsReason)):
+        return lhsReason == rhsReason
+    case (.invalidState(let lhsDesc), .invalidState(let rhsDesc)):
+        return lhsDesc == rhsDesc
+    case (.unknownError, .unknownError):
+        return true
+    default:
+        return false
+    }
+}
+
+// MARK: - Error Banner View
+
+struct ErrorBanner: View {
+    let message: String
+    let type: ErrorType
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // 图标
+            Image(systemName: type.icon)
+                .font(.title2)
+                .foregroundColor(type.color)
+                .frame(width: 24, height: 24)
+
+            // 消息文本
+            Text(message)
+                .font(.body)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            // 关闭按钮
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .frame(width: 20, height: 20)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(4)
+            .background(Color.gray.opacity(0.1))
+            .clipShape(Circle())
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(type.backgroundColor)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(type.borderColor, lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .transition(
+            .asymmetric(
+                insertion: .move(edge: .top).combined(with: .opacity),
+                removal: .opacity
+            )
+        )
+    }
+}
+
+// MARK: - Audio Transcriber Delegate Protocol
+
+protocol AudioTranscriberDelegate {
+    func audioTranscriber(_ transcriber: AudioTranscriber, didEncounterError error: VocalTextError)
+    func audioTranscriber(_ transcriber: AudioTranscriber, didUpdateStatus status: String)
+    func audioTranscriber(_ transcriber: AudioTranscriber, didUpdateProgress progress: Double)
+}
+
 // 类似iOS语音备忘录的波形视图
 struct VoiceMemoWaveformView: View {
     @Binding var volumeLevel: Double
@@ -124,14 +485,42 @@ struct MainView: View {
     @State private var hasCheckedModelStatus = false
     @State private var hasAudioInputDevices = true // 新增状态，用于跟踪是否有音频输入设备
     @State private var isDownloadingModel = false // 新增状态，用于跟踪是否正在下载模型
-    
+
+    // 错误系统
+    @State private var currentError: VocalTextError?
+    @State private var showErrorBanner = false
+    @State private var errorTimer: Timer?
+    @State private var isUserDismissed = false
+    @State private var lastError: VocalTextError?
+    @State private var errorCount = 0
+
+    // 系统健康检查
+    @StateObject private var healthChecker = SystemHealthChecker()
+    @State private var showHealthStatus = false
+    @State private var hasRunHealthCheck = false
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             // 主页面内容
             VStack {
                 HStack {
+                    // 健康状态指示器（仅在有健康问题时显示）
+                    if showHealthStatus && !healthChecker.issues.isEmpty {
+                        Button(action: {
+                            showHealthStatusDetail()
+                        }) {
+                            Image(systemName: healthChecker.healthStatus == .error ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                                .foregroundColor(healthChecker.healthStatus == .error ? .red : .orange)
+                                .font(.title2)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.top, 12)
+                        .padding(.leading, 16)
+                        .help("系统健康状态: \(healthChecker.issues.count) 个问题")
+                    }
+
                     Spacer()
-                    
+
                     Button(action: {
                         // 显示设置界面
                         showSettingsView = true
@@ -344,9 +733,25 @@ struct MainView: View {
                 .transition(.move(edge: .leading))
                 .frame(width: 400, height: 300)
             }
+
+            // 错误提示层
+            if showErrorBanner, let error = currentError {
+                ErrorBanner(
+                    message: error.errorDescription ?? "Unknown error",
+                    type: error.type,
+                    onDismiss: dismissError
+                )
+                .padding(.top, 8)
+                .zIndex(1) // 确保在最上层
+            }
         }
         .frame(width: 400, height: 300) // 增大窗口尺寸
         .onAppear {
+            // 设置委托（仅在第一次时）
+            if audioTranscriber.delegate == nil {
+                audioTranscriber.delegate = self
+            }
+
             // 检查是否需要显示教程
             let hasCompletedTutorial = UserDefaults.standard.bool(forKey: "HasCompletedTutorial")
             if !hasCompletedTutorial {
@@ -355,7 +760,7 @@ struct MainView: View {
                     showTutorialView = true
                 }
             }
-            
+
             // 只有在还没有检查过麦克风权限时才检查
             if !hasRequestedMicrophonePermission {
                 checkMicrophonePermission()
@@ -440,19 +845,99 @@ struct MainView: View {
                 // 下载完成后恢复正常行为
                 // Model download completed
             }
-            
+
+            // 註冊鍵盤快捷键通知 - 切换录音
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ToggleRecording"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                // 只有在有麦克风权限的情况下才切换录音
+                if self.hasMicrophonePermission && self.hasAudioInputDevices && !self.isModelDownloading && !self.showSettingsView && !self.showTutorialView {
+                    self.isRecording.toggle()
+                    if self.isRecording {
+                        // 設置模型並開始錄音
+                        self.audioTranscriber.setModel(self.selectedModel)
+                        // 设置语言
+                        if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+                            self.audioTranscriber.setLanguage(savedLanguage)
+                        }
+                        // 直接开始录音，模型检查在AudioTranscriber内部处理
+                        self.audioTranscriber.startRecording()
+                    } else {
+                        self.audioTranscriber.stopRecording()
+                    }
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 复制转录文本
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("CopyTranscript"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.audioTranscriber.transcript.isEmpty && self.audioTranscriber.transcript != NSLocalizedString("recording.state.ready", comment: "Ready to record") {
+                    self.copyToClipboard(self.audioTranscriber.transcript)
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 打开设置
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("OpenSettings"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.showTutorialView {
+                    self.showSettingsView = true
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 显示教程
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ShowTutorial"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.showSettingsView {
+                    self.showTutorialView = true
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 强制重试下载
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ForceRetryDownload"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.modelDownloaded && self.hasCheckedModelStatus {
+                    // 重新开始下载流程
+                    self.isModelDownloading = false
+                    self.checkModelStatus()
+                }
+            }
+
             // 延遲設置設備選擇，確保音頻設備已加載
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 let savedDeviceIndex = UserDefaults.standard.integer(forKey: "SelectedDeviceIndex")
                 if savedDeviceIndex < audioTranscriber.audioDevices.count {
                     audioTranscriber.setSelectedDevice(index: savedDeviceIndex)
                 }
-                
+
                 // 加载保存的语言设置
                 if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
                     audioTranscriber.setLanguage(savedLanguage)
                 }
             }
+
+            // 延遲運行系統健康檢查（避免影響啟動性能）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                if !self.hasRunHealthCheck {
+                    self.runHealthCheck()
+                }
+            }
+        }
+        .onDisappear {
+            cleanupErrorTimer()
         }
     }
     
@@ -692,6 +1177,183 @@ struct MainView: View {
         let seconds = Int(timeInterval) % 60
         let centiseconds = Int((timeInterval.truncatingRemainder(dividingBy: 1)) * 100)  // 百分之一秒
         return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
+    }
+
+    // MARK: - System Health Check Methods
+
+    // 运行系统健康检查
+    private func runHealthCheck() {
+        #if DEBUG
+        print("🔍 Running system health check...")
+        #endif
+
+        hasRunHealthCheck = true
+
+        Task {
+            let status = await healthChecker.checkSystemHealth()
+
+            await MainActor.run {
+                // 根据健康状态显示提示
+                switch status {
+                case .error:
+                    // 显示健康状态指示器
+                    showHealthStatus = true
+                    #if DEBUG
+                    print("⚠️ System health check found errors")
+                    #endif
+
+                case .warning:
+                    // 显示警告但不阻塞使用
+                    showHealthStatus = true
+                    #if DEBUG
+                    print("⚠️ System health check found warnings")
+                    #endif
+
+                case .healthy:
+                    // 健康状态良好，不显示提示
+                    showHealthStatus = false
+                    #if DEBUG
+                    print("✅ System health check passed")
+                    #endif
+
+                case .checking:
+                    // 仍在检查中
+                    break
+                }
+            }
+        }
+    }
+
+    // 显示健康状态详情
+    private func showHealthStatusDetail() {
+        if healthChecker.issues.isEmpty {
+            showInfo("系统状态良好")
+        } else {
+            let issueCount = healthChecker.issues.count
+            let errorCount = healthChecker.issues.filter { $0.type == .error }.count
+            let warningCount = healthChecker.issues.filter { $0.type == .warning }.count
+
+            var message = "发现 \(issueCount) 个问题"
+            if errorCount > 0 {
+                message += " (\(errorCount) 个错误)"
+            }
+            if warningCount > 0 {
+                message += " (\(warningCount) 个警告)"
+            }
+
+            showInfo(message)
+        }
+    }
+
+    // MARK: - Error Handling Methods
+
+    // 处理错误
+    private func handleError(_ error: VocalTextError) {
+        #if DEBUG
+        print("❌ Error occurred: \(error.errorDescription ?? "Unknown")")
+        #endif
+
+        // 检测重复错误
+        if lastError == error {
+            errorCount += 1
+            if errorCount >= 3 {
+                // 连续 3 次相同错误，延长显示时间
+                showInfo("重复错误: \(error.errorDescription ?? "Unknown")")
+                return
+            }
+        } else {
+            errorCount = 1
+            lastError = error
+        }
+
+        currentError = error
+        isUserDismissed = false
+
+        withAnimation {
+            showErrorBanner = true
+        }
+
+        // 清理之前的定时器
+        errorTimer?.invalidate()
+
+        // 根据错误类型设置不同的显示时间
+        let displayDuration: TimeInterval
+        switch error.type {
+        case .error: displayDuration = 5.0
+        case .warning: displayDuration = 3.0
+        case .info: displayDuration = 2.0
+        }
+
+        // 自动消失（仅对可恢复错误）
+        if error.isRecoverable {
+            errorTimer = Timer.scheduledTimer(withTimeInterval: displayDuration, repeats: false) { _ in
+                if !self.isUserDismissed {
+                    withAnimation {
+                        self.showErrorBanner = false
+                    }
+                }
+            }
+        }
+    }
+
+    // 显示信息
+    private func showInfo(_ message: String) {
+        currentError = .invalidState(description: message)
+        isUserDismissed = false
+
+        withAnimation {
+            showErrorBanner = true
+        }
+
+        errorTimer?.invalidate()
+        errorTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
+            if !self.isUserDismissed {
+                withAnimation {
+                    self.showErrorBanner = false
+                }
+            }
+        }
+    }
+
+    // 隐藏错误
+    private func dismissError() {
+        isUserDismissed = true
+        errorTimer?.invalidate()
+        errorTimer = nil
+
+        withAnimation {
+            showErrorBanner = false
+        }
+    }
+
+    // 清理错误定时器
+    private func cleanupErrorTimer() {
+        errorTimer?.invalidate()
+        errorTimer = nil
+    }
+}
+
+// MARK: - AudioTranscriberDelegate Implementation
+
+extension MainView: AudioTranscriberDelegate {
+    func audioTranscriber(_ transcriber: AudioTranscriber, didEncounterError error: VocalTextError) {
+        handleError(error)
+    }
+
+    func audioTranscriber(_ transcriber: AudioTranscriber, didUpdateStatus status: String) {
+        // Status updates are handled through published properties
+        // This delegate method can be used for additional status handling if needed
+        #if DEBUG
+        print("Status update: \(status)")
+        #endif
+    }
+
+    func audioTranscriber(_ transcriber: AudioTranscriber, didUpdateProgress progress: Double) {
+        // Progress updates are handled through published properties
+        // This delegate method can be used for additional progress handling if needed
+        #if DEBUG
+        print("Progress update: \(progress)")
+        #endif
     }
 }
 
