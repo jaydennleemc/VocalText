@@ -496,11 +496,27 @@ struct MainView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
+        ZStack(alignment: .top) {
             // 主页面内容
             VStack {
                 HStack {
+                    // 健康状态指示器（仅在有健康问题时显示）
+                    if showHealthStatus && !healthChecker.issues.isEmpty {
+                        Button(action: {
+                            showHealthStatusDetail()
+                        }) {
+                            Image(systemName: healthChecker.healthStatus == .error ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                                .foregroundColor(healthChecker.healthStatus == .error ? .red : .orange)
+                                .font(.title2)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.top, 12)
+                        .padding(.leading, 16)
+                        .help("系统健康状态: \(healthChecker.issues.count) 个问题")
+                    }
+
                     Spacer()
-                    
+
                     Button(action: {
                         // 显示设置界面
                         showSettingsView = true
@@ -724,9 +740,25 @@ struct MainView: View {
                 .padding(.top, 8)
                 .zIndex(1) // 确保在最上层
             }
+
+            // 错误提示层
+            if showErrorBanner, let error = currentError {
+                ErrorBanner(
+                    message: error.errorDescription ?? "Unknown error",
+                    type: error.type,
+                    onDismiss: dismissError
+                )
+                .padding(.top, 8)
+                .zIndex(1) // 确保在最上层
+            }
         }
         .frame(width: 400, height: 300) // 增大窗口尺寸
         .onAppear {
+            // 设置委托（仅在第一次时）
+            if audioTranscriber.delegate == nil {
+                audioTranscriber.delegate = self
+            }
+
             // 设置委托（仅在第一次时）
             if audioTranscriber.delegate == nil {
                 audioTranscriber.delegate = self
@@ -740,6 +772,7 @@ struct MainView: View {
                     showTutorialView = true
                 }
             }
+
 
             // 只有在还没有检查过麦克风权限时才检查
             if !hasRequestedMicrophonePermission {
@@ -825,13 +858,84 @@ struct MainView: View {
                 // 下载完成后恢复正常行为
                 // Model download completed
             }
-            
+
+            // 註冊鍵盤快捷键通知 - 切换录音
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ToggleRecording"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                // 只有在有麦克风权限的情况下才切换录音
+                if self.hasMicrophonePermission && self.hasAudioInputDevices && !self.isModelDownloading && !self.showSettingsView && !self.showTutorialView {
+                    self.isRecording.toggle()
+                    if self.isRecording {
+                        // 設置模型並開始錄音
+                        self.audioTranscriber.setModel(self.selectedModel)
+                        // 设置语言
+                        if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+                            self.audioTranscriber.setLanguage(savedLanguage)
+                        }
+                        // 直接开始录音，模型检查在AudioTranscriber内部处理
+                        self.audioTranscriber.startRecording()
+                    } else {
+                        self.audioTranscriber.stopRecording()
+                    }
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 复制转录文本
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("CopyTranscript"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.audioTranscriber.transcript.isEmpty && self.audioTranscriber.transcript != NSLocalizedString("recording.state.ready", comment: "Ready to record") {
+                    self.copyToClipboard(self.audioTranscriber.transcript)
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 打开设置
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("OpenSettings"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.showTutorialView {
+                    self.showSettingsView = true
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 显示教程
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ShowTutorial"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.showSettingsView {
+                    self.showTutorialView = true
+                }
+            }
+
+            // 註冊鍵盤快捷键通知 - 强制重试下载
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ForceRetryDownload"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                if !self.modelDownloaded && self.hasCheckedModelStatus {
+                    // 重新开始下载流程
+                    self.isModelDownloading = false
+                    self.checkModelStatus()
+                }
+            }
+
             // 延遲設置設備選擇，確保音頻設備已加載
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 let savedDeviceIndex = UserDefaults.standard.integer(forKey: "SelectedDeviceIndex")
                 if savedDeviceIndex < audioTranscriber.audioDevices.count {
                     audioTranscriber.setSelectedDevice(index: savedDeviceIndex)
                 }
+
 
                 // 加载保存的语言设置
                 if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
