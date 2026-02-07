@@ -1,12 +1,12 @@
-# VocalText 🎙️
+# Typeless ⌨️
 > 適用於 macOS 的即時語音轉文字工具 - 注重隱私，支援離線使用
 
 [![](https://img.shields.io/badge/平台-macOS-blue)](https://www.apple.com/macos)
 [![](https://img.shields.io/badge/語言-Swift-orange)](https://swift.org)
-[![](https://img.shields.io/github/license/jaydennleemc/VocalText)](LICENSE)
-[![](https://img.shields.io/github/v/release/jaydennleemc/VocalText)](https://github.com/jaydennleemc/VocalText/releases)
+[![](https://img.shields.io/github/license/jaydennleemc/Typeless)](LICENSE)
+[![](https://img.shields.io/github/v/release/jaydennleemc/Typeless)](https://github.com/jaydennleemc/Typeless/releases)
 
-透過 VocalText 即時將您的語音轉換為文字 - 這款注重隱私的 macOS 選單列應用可完全離線工作。非常適合做筆記、採訪、講座和隨時隨地捕捉想法！
+透過 Typeless 即時將您的語音轉換為文字 - 這款注重隱私的 macOS 選單列應用可完全離線工作。非常適合做筆記、採訪、講座和隨時隨地捕捉想法！
 
 ## 🌟 功能特點
 
@@ -23,14 +23,14 @@
 ## 🚀 快速開始
 
 ### 安裝
-1. 從 [發布頁面](https://github.com/jaydennleemc/VocalText/releases) 下載最新版本
+1. 從 [發布頁面](https://github.com/jaydennleemc/Typeless/releases) 下載最新版本
 2. 解壓 `.zip` 檔案
-3. 將 `VocalText.app` 拖曳到您的應用程式資料夾
+3. 將 `Typeless.app` 拖曳到您的應用程式資料夾
 4. 啟動應用並按照首次設定操作
 
 ### 首次使用
 ```bash
-# 首次啟動時，VocalText 將：
+# 首次啟動時，Typeless 將：
 # 1. 引導您完成快速教學
 # 2. 下載預設轉錄模型 (~300MB)
 # 3. 請求麥克風存取權限
@@ -87,7 +87,7 @@
 ## 🔧 進階用法
 
 ### 自訂音訊設備
-- VocalText 自動偵測連接的音訊設備
+- Typeless 自動偵測連接的音訊設備
 - 在設定中選擇您偏好的輸入設備
 - 適合專業麥克風或音訊介面
 
@@ -128,22 +128,22 @@
 
 ## 🤝 貢獻
 
-喜歡 VocalText 嗎？幫助我們讓它變得更好！
+喜歡 Typeless 嗎？幫助我們讓它變得更好！
 
 ### 貢獻方式
-- 🐛 透過建立 [Issues](https://github.com/jaydennleemc/VocalText/issues) 報告錯誤
-- 💡 透過建立 [Issues](https://github.com/jaydennleemc/VocalText/issues) 建議功能
+- 🐛 透過建立 [Issues](https://github.com/jaydennleemc/Typeless/issues) 報告錯誤
+- 💡 透過建立 [Issues](https://github.com/jaydennleemc/Typeless/issues) 建議功能
 - 📝 透過提交 PR 改進文件
-- 🔧 透過 [Pull Requests](https://github.com/jaydennleemc/VocalText/pulls) 提交程式碼改進
+- 🔧 透過 [Pull Requests](https://github.com/jaydennleemc/Typeless/pulls) 提交程式碼改進
 - ⭐ 給這個倉庫加星以表示支持
 
 ### 開發設定
 ```bash
 # 克隆倉庫
-git clone https://github.com/jaydennleemc/VocalText.git
+git clone https://github.com/jaydennleemc/Typeless.git
 
 # 在 Xcode 中打開
-open VocalText.xcodeproj
+open Typeless.xcodeproj
 
 # 建置和執行
 # 在 Xcode 中按 CMD+R
@@ -157,7 +157,7 @@ open VocalText.xcodeproj
 - [SwiftUI 教學](https://developer.apple.com/tutorials/swiftui)
 
 ### 社群
-- [GitHub 討論](https://github.com/jaydennleemc/VocalText/discussions)
+- [GitHub 討論](https://github.com/jaydennleemc/Typeless/discussions)
 - [Twitter](https://twitter.com/yourhandle) (如適用)
 
 ## 📄 授權

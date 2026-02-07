@@ -1,12 +1,12 @@
-# VocalText 🎙️
+# Typeless ⌨️
 > Real-time voice-to-text transcription for macOS - Privacy-first, offline capable
 
 [![](https://img.shields.io/badge/platform-macOS-blue)](https://www.apple.com/macos)
 [![](https://img.shields.io/badge/language-Swift-orange)](https://swift.org)
-[![](https://img.shields.io/github/license/jaydennleemc/VocalText)](LICENSE)
-[![](https://img.shields.io/github/v/release/jaydennleemc/VocalText)](https://github.com/jaydennleemc/VocalText/releases)
+[![](https://img.shields.io/github/license/jaydennleemc/Typeless)](LICENSE)
+[![](https://img.shields.io/github/v/release/jaydennleemc/Typeless)](https://github.com/jaydennleemc/Typeless/releases)
 
-Transform your spoken words into text instantly with VocalText - the privacy-focused macOS menu bar app that works completely offline. Perfect for note-taking, interviews, lectures, and capturing ideas on the go!
+Transform your spoken words into text instantly with Typeless - the privacy-focused macOS menu bar app that works completely offline. Perfect for note-taking, interviews, lectures, and capturing ideas on the go!
 
 ## 🌟 FEATURES
 
@@ -23,14 +23,14 @@ Transform your spoken words into text instantly with VocalText - the privacy-foc
 ## 🚀 QUICK START
 
 ### Installation
-1. Download the latest release from [Releases](https://github.com/jaydennleemc/VocalText/releases)
+1. Download the latest release from [Releases](https://github.com/jaydennleemc/Typeless/releases)
 2. Extract the `.zip` file
-3. Drag `VocalText.app` to your Applications folder
+3. Drag `Typeless.app` to your Applications folder
 4. Launch the app and follow the first-time setup
 
 ### First Use
 ```bash
-# On first launch, VocalText will:
+# On first launch, Typeless will:
 # 1. Guide you through a quick tutorial
 # 2. Download the default transcription model (~300MB)
 # 3. Request microphone access permission
@@ -128,22 +128,22 @@ Click Gear Icon in main window
 
 ## 🤝 CONTRIBUTING
 
-Love VocalText? Help make it even better!
+Love Typeless? Help make it even better!
 
 ### Ways to Contribute
-- 🐛 Report bugs by creating [Issues](https://github.com/jaydennleemc/VocalText/issues)
-- 💡 Suggest features by creating [Issues](https://github.com/jaydennleemc/VocalText/issues)
+- 🐛 Report bugs by creating [Issues](https://github.com/jaydennleemc/Typeless/issues)
+- 💡 Suggest features by creating [Issues](https://github.com/jaydennleemc/Typeless/issues)
 - 📝 Improve documentation by submitting PRs
-- 🔧 Submit code improvements via [Pull Requests](https://github.com/jaydennleemc/VocalText/pulls)
+- 🔧 Submit code improvements via [Pull Requests](https://github.com/jaydennleemc/Typeless/pulls)
 - ⭐ Star this repo to show your support
 
 ### Development Setup
 ```bash
 # Clone the repository
-git clone https://github.com/jaydennleemc/VocalText.git
+git clone https://github.com/jaydennleemc/Typeless.git
 
 # Open in Xcode
-open VocalText.xcodeproj
+open Typeless.xcodeproj
 
 # Build and run
 # CMD+R in Xcode
@@ -157,7 +157,7 @@ open VocalText.xcodeproj
 - [SwiftUI Tutorials](https://developer.apple.com/tutorials/swiftui)
 
 ### Community
-- [GitHub Discussions](https://github.com/jaydennleemc/VocalText/discussions)
+- [GitHub Discussions](https://github.com/jaydennleemc/Typeless/discussions)
 - [Twitter](https://twitter.com/yourhandle) (if applicable)
 
 ## 📄 LICENSE

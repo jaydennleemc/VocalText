@@ -1,6 +1,6 @@
 //
 //  AudioTranscriber.swift
-//  VocalText
+//  Typeless
 //
 //  Created by LEEJAYMC on 16/9/2025.
 //
@@ -203,29 +203,29 @@ class AudioTranscriber: NSObject, ObservableObject {
             NotificationCenter.default.post(name: Notification.Name("ModelDownloadFinished"), object: nil)
 
             // 提供更详细的错误信息并通过delegate报告
-            let vocalTextError: VocalTextError
+            let typelessError: TypelessError
             if error.domain == NSURLErrorDomain {
                 switch error.code {
                 case NSURLErrorNotConnectedToInternet:
                     downloadStatus = NSLocalizedString("error.network.notConnected", comment: "No internet connection")
-                    vocalTextError = .networkNotConnected
+                    typelessError = .networkNotConnected
                 case NSURLErrorTimedOut:
                     downloadStatus = NSLocalizedString("error.network.timeout", comment: "Connection timeout")
-                    vocalTextError = .networkTimeout
+                    typelessError = .networkTimeout
                 case NSURLErrorCannotFindHost:
                     downloadStatus = NSLocalizedString("error.network.serverNotFound", comment: "Server not found")
-                    vocalTextError = .networkServerNotFound
+                    typelessError = .networkServerNotFound
                 default:
                     downloadStatus = String(format: NSLocalizedString("error.network.generic", comment: "Network error"), error.localizedDescription)
-                    vocalTextError = .networkGeneric(underlying: error)
+                    typelessError = .networkGeneric(underlying: error)
                 }
             } else {
                 downloadStatus = String(format: NSLocalizedString("model.status.download.failed", comment: "Model download failed"), error.localizedDescription)
-                vocalTextError = .modelDownloadFailed(reason: error.localizedDescription)
+                typelessError = .modelDownloadFailed(reason: error.localizedDescription)
             }
 
             // 通过delegate报告错误
-            delegate?.audioTranscriber(self, didEncounterError: vocalTextError)
+            delegate?.audioTranscriber(self, didEncounterError: typelessError)
 
             return false
         } catch {

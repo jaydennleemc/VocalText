@@ -38,8 +38,8 @@ jobs:
     - name: Build and Test
       run: |
         # Build the project first to generate the app bundle
-        xcodebuild -project VocalText.xcodeproj \
-          -scheme VocalText \
+        xcodebuild -project Typeless.xcodeproj \
+          -scheme Typeless \
           -configuration Release \
           -derivedDataPath DerivedData \
           -destination "platform=macOS,arch=arm64" \
@@ -50,7 +50,7 @@ jobs:
           clean build
           
         # Verify the app was built successfully
-        if [ ! -d "DerivedData/Build/Products/Release/VocalText.app" ]; then
+        if [ ! -d "DerivedData/Build/Products/Release/Typeless.app" ]; then
           echo "❌ Build failed - app bundle not found"
           exit 1
         fi
@@ -59,12 +59,12 @@ jobs:
     - name: Get app version
       run: |
         # Get the app version from the project
-        APP_VERSION=$(defaults read "$PWD/DerivedData/Build/Products/Release/VocalText.app/Contents/Info.plist" CFBundleShortVersionString)
+        APP_VERSION=$(defaults read "$PWD/DerivedData/Build/Products/Release/Typeless.app/Contents/Info.plist" CFBundleShortVersionString)
         echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
         echo "App version: $APP_VERSION"
         
         # Get build number
-        BUILD_NUMBER=$(defaults read "$PWD/DerivedData/Build/Products/Release/VocalText.app/Contents/Info.plist" CFBundleVersion)
+        BUILD_NUMBER=$(defaults read "$PWD/DerivedData/Build/Products/Release/Typeless.app/Contents/Info.plist" CFBundleVersion)
         echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
         echo "Build number: $BUILD_NUMBER"
     
@@ -73,21 +73,21 @@ jobs:
     
     - name: Copy app bundle to artifacts directory
       run: |
-        cp -R DerivedData/Build/Products/Release/VocalText.app build-artifacts/
+        cp -R DerivedData/Build/Products/Release/Typeless.app build-artifacts/
         # Also copy dSYM if it exists
-        if [ -d "DerivedData/Build/Products/Release/VocalText.app.dSYM" ]; then
-          cp -R DerivedData/Build/Products/Release/VocalText.app.dSYM build-artifacts/
+        if [ -d "DerivedData/Build/Products/Release/Typeless.app.dSYM" ]; then
+          cp -R DerivedData/Build/Products/Release/Typeless.app.dSYM build-artifacts/
         fi
     
     - name: Create ZIP archive
       run: |
         cd build-artifacts
-        zip -r "VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "VocalText.app" "VocalText.app.dSYM" 2>/dev/null || zip -r "VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "VocalText.app"
-        echo "Created: VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip"
+        zip -r "Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "Typeless.app" "Typeless.app.dSYM" 2>/dev/null || zip -r "Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "Typeless.app"
+        echo "Created: Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip"
     
     - name: Upload ZIP as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
-        path: build-artifacts/VocalText-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
+        name: Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
+        path: build-artifacts/Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
         retention-days: 30

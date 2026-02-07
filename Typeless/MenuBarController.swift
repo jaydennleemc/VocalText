@@ -1,6 +1,6 @@
 //
 //  MenuBarController.swift
-//  VocalText
+//  Typeless
 //
 //  Created by LEEJAYMC on 16/9/2025.
 //
@@ -28,7 +28,7 @@ class MenuBarController: NSObject {
         
         // 设置状态栏图标
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "VocalText")
+            button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Typeless")
             button.action = #selector(statusBarButtonClicked)
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])

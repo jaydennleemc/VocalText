@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "3CB4DDAA2E78F7D7008C5555"
-               BuildableName = "VocalText.app"
-               BlueprintName = "VocalText"
-               ReferencedContainer = "container:VocalText.xcodeproj">
+               BuildableName = "Typeless.app"
+               BlueprintName = "Typeless"
+               ReferencedContainer = "container:Typeless.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,9 +45,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3CB4DDAA2E78F7D7008C5555"
-            BuildableName = "VocalText.app"
-            BlueprintName = "VocalText"
-            ReferencedContainer = "container:VocalText.xcodeproj">
+            BuildableName = "Typeless.app"
+            BlueprintName = "Typeless"
+            ReferencedContainer = "container:Typeless.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -62,9 +62,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3CB4DDAA2E78F7D7008C5555"
-            BuildableName = "VocalText.app"
-            BlueprintName = "VocalText"
-            ReferencedContainer = "container:VocalText.xcodeproj">
+            BuildableName = "Typeless.app"
+            BlueprintName = "Typeless"
+            ReferencedContainer = "container:Typeless.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

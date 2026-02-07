@@ -1,6 +1,6 @@
 //
-//  VocalTextApp.swift
-//  VocalText
+//  TypelessApp.swift
+//  Typeless
 //
 //  Created by LEEJAYMC on 16/9/2025.
 //
@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct VocalTextApp: App {
+struct TypelessApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     var body: some Scene {
         // 移除 WindowGroup 以创建无窗口应用

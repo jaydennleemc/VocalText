@@ -50,8 +50,8 @@ jobs:
     - name: Build Release
       run: |
         # Build the project first to generate the app bundle
-        xcodebuild -project VocalText.xcodeproj \
-          -scheme VocalText \
+        xcodebuild -project Typeless.xcodeproj \
+          -scheme Typeless \
           -configuration Release \
           -derivedDataPath DerivedData \
           -destination "platform=macOS,arch=arm64" \
@@ -62,7 +62,7 @@ jobs:
           clean build
           
         # Verify the app was built successfully
-        if [ ! -d "DerivedData/Build/Products/Release/VocalText.app" ]; then
+        if [ ! -d "DerivedData/Build/Products/Release/Typeless.app" ]; then
           echo "❌ Build failed - app bundle not found"
           exit 1
         fi
@@ -71,12 +71,12 @@ jobs:
     - name: Get app version
       run: |
         # Get the app version from the project
-        APP_VERSION=$(defaults read "$PWD/DerivedData/Build/Products/Release/VocalText.app/Contents/Info.plist" CFBundleShortVersionString)
+        APP_VERSION=$(defaults read "$PWD/DerivedData/Build/Products/Release/Typeless.app/Contents/Info.plist" CFBundleShortVersionString)
         echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
         echo "App version: $APP_VERSION"
         
         # Get build number
-        BUILD_NUMBER=$(defaults read "$PWD/DerivedData/Build/Products/Release/VocalText.app/Contents/Info.plist" CFBundleVersion)
+        BUILD_NUMBER=$(defaults read "$PWD/DerivedData/Build/Products/Release/Typeless.app/Contents/Info.plist" CFBundleVersion)
         echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
         echo "Build number: $BUILD_NUMBER"
     
@@ -85,10 +85,10 @@ jobs:
     
     - name: Copy app bundle to artifacts directory
       run: |
-        cp -R DerivedData/Build/Products/Release/VocalText.app build-artifacts/
+        cp -R DerivedData/Build/Products/Release/Typeless.app build-artifacts/
         # Copy dSYM if requested and exists
-        if [ "${{ github.event.inputs.include_dsym }}" == "true" ] && [ -d "DerivedData/Build/Products/Release/VocalText.app.dSYM" ]; then
-          cp -R DerivedData/Build/Products/Release/VocalText.app.dSYM build-artifacts/
+        if [ "${{ github.event.inputs.include_dsym }}" == "true" ] && [ -d "DerivedData/Build/Products/Release/Typeless.app.dSYM" ]; then
+          cp -R DerivedData/Build/Products/Release/Typeless.app.dSYM build-artifacts/
           echo "✅ dSYM included"
         else
           echo "ℹ️ dSYM not included"
@@ -97,18 +97,18 @@ jobs:
     - name: Create ZIP archive
       run: |
         cd build-artifacts
-        if [ "${{ github.event.inputs.include_dsym }}" == "true" ] && [ -d "VocalText.app.dSYM" ]; then
-          zip -r "VocalText-${{ env.APP_VERSION }}.zip" "VocalText.app" "VocalText.app.dSYM"
-          echo "Created: VocalText-${{ env.APP_VERSION }}.zip (with dSYM)"
+        if [ "${{ github.event.inputs.include_dsym }}" == "true" ] && [ -d "Typeless.app.dSYM" ]; then
+          zip -r "Typeless-${{ env.APP_VERSION }}.zip" "Typeless.app" "Typeless.app.dSYM"
+          echo "Created: Typeless-${{ env.APP_VERSION }}.zip (with dSYM)"
         else
-          zip -r "VocalText-${{ env.APP_VERSION }}.zip" "VocalText.app"
-          echo "Created: VocalText-${{ env.APP_VERSION }}.zip"
+          zip -r "Typeless-${{ env.APP_VERSION }}.zip" "Typeless.app"
+          echo "Created: Typeless-${{ env.APP_VERSION }}.zip"
         fi
     
     - name: Generate Release Notes
       run: |
         # Generate basic release notes
-        echo "## VocalText ${{ github.event.inputs.version }}" > release_notes.md
+        echo "## Typeless ${{ github.event.inputs.version }}" > release_notes.md
         echo "" >> release_notes.md
         echo "### 🎯 Features" >> release_notes.md
         echo "- Fixed microphone permission handling in Release builds" >> release_notes.md
@@ -133,7 +133,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.event.inputs.version }}
-        release_name: VocalText ${{ github.event.inputs.version }}
+        release_name: Typeless ${{ github.event.inputs.version }}
         body_path: release_notes.md
         draft: false
         prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
@@ -144,8 +144,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build-artifacts/VocalText-${{ env.APP_VERSION }}.zip
-        asset_name: VocalText-${{ env.APP_VERSION }}.zip
+        asset_path: build-artifacts/Typeless-${{ env.APP_VERSION }}.zip
+        asset_name: Typeless-${{ env.APP_VERSION }}.zip
         asset_content_type: application/zip
     
     - name: Release Summary

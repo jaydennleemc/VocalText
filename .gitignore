@@ -84,3 +84,6 @@ iOSInjectionProject/
 # Build artifacts
 .build/
 build-artifacts/
+
+# Macos
+.DS_Store

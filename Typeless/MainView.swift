@@ -1,6 +1,6 @@
 //
 //  MainView.swift
-//  VocalText
+//  Typeless
 //
 //  Created by LEEJAYMC on 16/9/2025.
 //
@@ -50,9 +50,9 @@ enum ErrorType {
     }
 }
 
-// MARK: - VocalTextError Enum
+// MARK: - TypelessError Enum
 
-enum VocalTextError: LocalizedError, Equatable {
+enum TypelessError: LocalizedError, Equatable {
     // 麦克风权限相关
     case microphonePermissionDenied
     case microphonePermissionRestricted
@@ -260,7 +260,7 @@ enum VocalTextError: LocalizedError, Equatable {
 
 // MARK: - Equatable Implementation
 
-func == (lhs: VocalTextError, rhs: VocalTextError) -> Bool {
+func == (lhs: TypelessError, rhs: TypelessError) -> Bool {
     switch (lhs, rhs) {
     case (.microphonePermissionDenied, .microphonePermissionDenied):
         return true
@@ -366,7 +366,7 @@ struct ErrorBanner: View {
 // MARK: - Audio Transcriber Delegate Protocol
 
 protocol AudioTranscriberDelegate {
-    func audioTranscriber(_ transcriber: AudioTranscriber, didEncounterError error: VocalTextError)
+    func audioTranscriber(_ transcriber: AudioTranscriber, didEncounterError error: TypelessError)
     func audioTranscriber(_ transcriber: AudioTranscriber, didUpdateStatus status: String)
     func audioTranscriber(_ transcriber: AudioTranscriber, didUpdateProgress progress: Double)
 }
@@ -487,11 +487,11 @@ struct MainView: View {
     @State private var isDownloadingModel = false // 新增状态，用于跟踪是否正在下载模型
 
     // 错误系统
-    @State private var currentError: VocalTextError?
+    @State private var currentError: TypelessError?
     @State private var showErrorBanner = false
     @State private var errorTimer: Timer?
     @State private var isUserDismissed = false
-    @State private var lastError: VocalTextError?
+    @State private var lastError: TypelessError?
     @State private var errorCount = 0
     
     var body: some View {
@@ -1085,7 +1085,7 @@ struct MainView: View {
     // MARK: - Error Handling Methods
 
     // 处理错误
-    private func handleError(_ error: VocalTextError) {
+    private func handleError(_ error: TypelessError) {
         print("❌ Error occurred: \(error.errorDescription ?? "Unknown")")
 
         // 检测重复错误
@@ -1171,7 +1171,7 @@ struct MainView: View {
 // MARK: - AudioTranscriberDelegate Implementation
 
 extension MainView: AudioTranscriberDelegate {
-    func audioTranscriber(_ transcriber: AudioTranscriber, didEncounterError error: VocalTextError) {
+    func audioTranscriber(_ transcriber: AudioTranscriber, didEncounterError error: TypelessError) {
         handleError(error)
     }
 

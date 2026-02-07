@@ -85,16 +85,16 @@
 "settings.view.app.language.label" = "应用语言";
 
 /* Tutorial */
-"tutorial.step1.title" = "欢迎使用 VocalText";
-"tutorial.step1.description" = "VocalText 是一款语音转文字工具，可以实时将您的语音转换为文本。";
+"tutorial.step1.title" = "欢迎使用 Typeless";
+"tutorial.step1.description" = "Typeless 是一款语音转文字工具，可以实时将您的语音转换为文本。";
 "tutorial.step2.title" = "开始录音";
 "tutorial.step2.description" = "点击麦克风按钮开始录音。录音时，您会看到实时的音频波形显示。";
 "tutorial.step3.title" = "查看转录结果";
-"tutorial.step3.description" = "录音结束后，VocalText 会自动将语音转换为文字并显示在屏幕上。您可以点击文本复制到剪贴板。";
+"tutorial.step3.description" = "录音结束后，Typeless 会自动将语音转换为文字并显示在屏幕上。您可以点击文本复制到剪贴板。";
 "tutorial.step4.title" = "设置和自定义";
 "tutorial.step4.description" = "点击设置按钮可以更改识别模型、选择音频输入设备和设置识别语言。";
 "tutorial.step5.title" = "准备开始使用";
-"tutorial.step5.description" = "现在您已经了解了基本功能，可以开始使用 VocalText 了。祝您使用愉快！";
+"tutorial.step5.description" = "现在您已经了解了基本功能，可以开始使用 Typeless 了。祝您使用愉快！";
 "tutorial.previous.button" = "上一步";
 "tutorial.start.using.button" = "开始使用";
 "tutorial.next.button" = "下一步";

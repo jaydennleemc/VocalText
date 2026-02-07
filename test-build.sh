@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# VocalText Build and Test Script
+# Typeless Build and Test Script
 # Used to test the build process locally and verify fixes
 
-echo "=== VocalText Local Build and Test Script ==="
+echo "=== Typeless Local Build and Test Script ==="
 
 # Check if Xcode is installed
 echo "Checking Xcode installation..."
@@ -36,8 +36,8 @@ rm -rf .build DerivedData
 
 echo "Building project..."
 # Run build command (same steps as in GitHub workflow)
-xcodebuild -project VocalText.xcodeproj \
-  -scheme VocalText \
+xcodebuild -project Typeless.xcodeproj \
+  -scheme Typeless \
   -configuration Release \
   ONLY_ACTIVE_ARCH=NO 
   
@@ -57,7 +57,7 @@ mkdir -p .build
 # Use the correct path to copy the app to the build artifacts directory
 # Based on Xcode's output, the actual path is under Library/Developer/Xcode/DerivedData
 XCODE_DERIVED_DATA_PATH="$HOME/Library/Developer/Xcode/DerivedData"
-APP_NAME="VocalText"
+APP_NAME="Typeless"
 APP_PATH=$(find "$XCODE_DERIVED_DATA_PATH" -name "$APP_NAME.app" -type d -path "*/Build/Products/Release/*" | head -n 1)
 
 if [ -z "$APP_PATH" ]; then
@@ -69,13 +69,13 @@ fi
 cp -R "$APP_PATH" .build/
 
 # Check if copy was successful
-if [ ! -d ".build/VocalText.app" ]; then
+if [ ! -d ".build/Typeless.app" ]; then
     echo "❌ Failed to successfully copy the app"
     exit 1
 fi
 
 # Get version number
-APP_VERSION=$(defaults read ".build/VocalText.app/Contents/Info.plist" CFBundleShortVersionString)
+APP_VERSION=$(defaults read ".build/Typeless.app/Contents/Info.plist" CFBundleShortVersionString)
 
 # If version number is empty, use default value
 if [ -z "$APP_VERSION" ]; then
@@ -85,9 +85,9 @@ echo "App version: $APP_VERSION"
 
 # Create ZIP package
 cd .build
-zip -r "VocalText-${APP_VERSION}.zip" "VocalText.app"
+zip -r "Typeless-${APP_VERSION}.zip" "Typeless.app"
 
-echo "✅ Build artifact created: .build/VocalText-${APP_VERSION}.zip"
+echo "✅ Build artifact created: .build/Typeless-${APP_VERSION}.zip"
 
 echo "=== Build completed ==="
 echo "Next steps:"
