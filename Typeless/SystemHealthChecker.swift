@@ -43,8 +43,8 @@ class SystemHealthChecker: ObservableObject {
         if !micPermission {
             newIssues.append(HealthIssue(
                 type: .error,
-                message: "麦克风权限未授权",
-                suggestion: "请在系统设置中授予麦克风权限"
+                message: NSLocalizedString("healthcheck.mic.permission.denied", comment: "Microphone permission not granted"),
+                suggestion: NSLocalizedString("healthcheck.mic.permission.suggestion", comment: "Grant microphone permission in system settings")
             ))
         }
 
@@ -53,8 +53,8 @@ class SystemHealthChecker: ObservableObject {
         if audioDevices.isEmpty {
             newIssues.append(HealthIssue(
                 type: .error,
-                message: "未检测到音频输入设备",
-                suggestion: "请连接麦克风或检查音频设置"
+                message: NSLocalizedString("healthcheck.audio.no.device", comment: "No audio input device detected"),
+                suggestion: NSLocalizedString("healthcheck.audio.device.suggestion", comment: "Connect microphone or check audio settings")
             ))
         }
 
@@ -63,8 +63,8 @@ class SystemHealthChecker: ObservableObject {
         if !storageCheck.hasEnoughSpace {
             newIssues.append(HealthIssue(
                 type: .error,
-                message: "存储空间不足",
-                suggestion: "需要至少 \(storageCheck.requiredSpace)GB 可用空间，当前可用 \(storageCheck.availableSpace)GB"
+                message: NSLocalizedString("healthcheck.storage.insufficient", comment: "Insufficient storage space"),
+                suggestion: String(format: NSLocalizedString("healthcheck.storage.suggestion", comment: "Storage space suggestion with required and available space"), storageCheck.requiredSpace, storageCheck.availableSpace)
             ))
         }
 
@@ -73,8 +73,8 @@ class SystemHealthChecker: ObservableObject {
         if !memoryCheck.hasEnoughMemory {
             newIssues.append(HealthIssue(
                 type: .warning,
-                message: "内存可能不足",
-                suggestion: "建议至少 4GB 内存以获得最佳体验，当前 \(memoryCheck.availableMemory)GB"
+                message: NSLocalizedString("healthcheck.memory.insufficient", comment: "Memory may be insufficient"),
+                suggestion: String(format: NSLocalizedString("healthcheck.memory.suggestion", comment: "Memory suggestion with available memory"), memoryCheck.availableMemory)
             ))
         }
 
@@ -83,8 +83,8 @@ class SystemHealthChecker: ObservableObject {
         if !networkCheck.isConnected {
             newIssues.append(HealthIssue(
                 type: .warning,
-                message: "网络连接不可用",
-                suggestion: "无法下载模型，需要网络连接"
+                message: NSLocalizedString("healthcheck.network.unavailable", comment: "Network connection unavailable"),
+                suggestion: NSLocalizedString("healthcheck.network.suggestion", comment: "Cannot download model, network connection required")
             ))
         }
 
@@ -93,8 +93,8 @@ class SystemHealthChecker: ObservableObject {
         if !osCheck.isSupported {
             newIssues.append(HealthIssue(
                 type: .error,
-                message: "macOS 版本过低",
-                suggestion: "需要 macOS 15.5 或更高版本"
+                message: NSLocalizedString("healthcheck.os.unsupported", comment: "macOS version too low"),
+                suggestion: NSLocalizedString("healthcheck.os.suggestion", comment: "Requires macOS 15.5 or higher")
             ))
         }
 
@@ -103,8 +103,8 @@ class SystemHealthChecker: ObservableObject {
         if !cpuCheck.isAppleSilicon {
             newIssues.append(HealthIssue(
                 type: .info,
-                message: "使用 Intel CPU",
-                suggestion: "Apple Silicon 设备上性能更佳"
+                message: NSLocalizedString("healthcheck.cpu.intel", comment: "Using Intel CPU"),
+                suggestion: NSLocalizedString("healthcheck.cpu.suggestion", comment: "Better performance on Apple Silicon devices")
             ))
         }
 
@@ -112,8 +112,8 @@ class SystemHealthChecker: ObservableObject {
         if isRunningInVirtualMachine() {
             newIssues.append(HealthIssue(
                 type: .warning,
-                message: "在虚拟机中运行",
-                suggestion: "音频处理性能可能受影响"
+                message: NSLocalizedString("healthcheck.vm.detected", comment: "Running in virtual machine"),
+                suggestion: NSLocalizedString("healthcheck.vm.suggestion", comment: "Audio processing performance may be affected")
             ))
         }
 
@@ -122,8 +122,8 @@ class SystemHealthChecker: ObservableObject {
         if loadCheck.isHighLoad {
             newIssues.append(HealthIssue(
                 type: .warning,
-                message: "系统负载较高",
-                suggestion: "建议关闭其他应用以释放资源"
+                message: NSLocalizedString("healthcheck.load.high", comment: "High system load"),
+                suggestion: NSLocalizedString("healthcheck.load.suggestion", comment: "Close other applications to free up resources")
             ))
         }
 
@@ -315,7 +315,7 @@ class SystemHealthChecker: ObservableObject {
         // 检查麦克风权限
         let hasMicPermission = await checkMicrophonePermission()
         if !hasMicPermission {
-            permissions.append("Microphone")
+            permissions.append(NSLocalizedString("healthcheck.permission.microphone", comment: "Microphone"))
         }
 
         // 检查通知权限
@@ -323,7 +323,7 @@ class SystemHealthChecker: ObservableObject {
             let notificationCenter = UNUserNotificationCenter.current()
             let settings = await notificationCenter.notificationSettings()
             if settings.authorizationStatus != .authorized {
-                permissions.append("Notifications")
+                permissions.append(NSLocalizedString("healthcheck.permission.notifications", comment: "Notifications"))
             }
         }
 
@@ -332,19 +332,19 @@ class SystemHealthChecker: ObservableObject {
 
     /// 生成系统健康报告
     func generateHealthReport() -> String {
-        var report = "VocalText 系统健康报告\n"
+        var report = NSLocalizedString("healthcheck.report.title", comment: "VocalText System Health Report") + "\n"
         report += "=====================\n\n"
 
-        report += "状态: \(healthStatus)\n"
-        report += "检测时间: \(Date())\n\n"
+        report += NSLocalizedString("healthcheck.report.status", comment: "Status") + ": \(healthStatus)\n"
+        report += NSLocalizedString("healthcheck.report.time", comment: "Check time") + ": \(Date())\n\n"
 
         if issues.isEmpty {
-            report += "✅ 未发现健康问题\n"
+            report += NSLocalizedString("healthcheck.report.no.issues", comment: "No health issues found") + "\n"
         } else {
-            report += "⚠️ 发现 \(issues.count) 个问题:\n\n"
+            report += String(format: NSLocalizedString("healthcheck.report.issues.found", comment: "Found N issues"), issues.count) + ":\n\n"
             for (index, issue) in issues.enumerated() {
                 report += "\(index + 1). [\(issue.type)] \(issue.message)\n"
-                report += "   建议: \(issue.suggestion)\n\n"
+                report += NSLocalizedString("healthcheck.report.suggestion", comment: "Suggestion") + ": \(issue.suggestion)\n\n"
             }
         }
 
@@ -354,11 +354,11 @@ class SystemHealthChecker: ObservableObject {
         let storageCheck = checkStorageSpace()
         let memoryCheck = checkMemory()
 
-        report += "系统信息:\n"
-        report += "- macOS 版本: \(osCheck.version)\n"
-        report += "- CPU 架构: \(cpuCheck.architecture)\n"
-        report += "- 可用存储: \(String(format: "%.2f", storageCheck.availableSpace))GB\n"
-        report += "- 可用内存: \(String(format: "%.2f", memoryCheck.availableMemory))GB\n"
+        report += NSLocalizedString("healthcheck.report.system.info", comment: "System Information") + ":\n"
+        report += "- " + NSLocalizedString("healthcheck.report.macos.version", comment: "macOS Version") + ": \(osCheck.version)\n"
+        report += "- " + NSLocalizedString("healthcheck.report.cpu.arch", comment: "CPU Architecture") + ": \(cpuCheck.architecture)\n"
+        report += "- " + NSLocalizedString("healthcheck.report.storage.available", comment: "Available Storage") + ": \(String(format: "%.2f", storageCheck.availableSpace))GB\n"
+        report += "- " + NSLocalizedString("healthcheck.report.memory.available", comment: "Available Memory") + ": \(String(format: "%.2f", memoryCheck.availableMemory))GB\n"
 
         return report
     }
@@ -367,13 +367,13 @@ class SystemHealthChecker: ObservableObject {
     func getUserFriendlyMessage() -> String {
         switch healthStatus {
         case .healthy:
-            return "系统状态良好，可以正常使用所有功能。"
+            return NSLocalizedString("healthcheck.status.healthy.message", comment: "System status good, all features available")
         case .warning:
-            return "发现一些警告，但核心功能可用。建议查看具体问题。"
+            return NSLocalizedString("healthcheck.status.warning.message", comment: "Some warnings found, core features available")
         case .error:
-            return "发现严重问题，某些功能可能无法使用。请检查并修复问题。"
+            return NSLocalizedString("healthcheck.status.error.message", comment: "Serious issues found, some features may not work")
         case .checking:
-            return "正在检查系统状态..."
+            return NSLocalizedString("healthcheck.status.checking.message", comment: "Checking system status")
         }
     }
 }

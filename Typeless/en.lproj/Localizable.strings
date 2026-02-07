@@ -112,3 +112,69 @@
 "ui.language.en" = "English";
 "ui.language.zh-Hans" = "简体中文";
 "ui.language.zh-Hant" = "繁體中文";
+
+/* New UI Elements */
+"main.view.transcription.title" = "Transcription";
+"main.view.copied" = "Copied!";
+"main.view.copy.tooltip" = "Copy to clipboard";
+"main.view.settings.tooltip" = "Settings";
+"main.view.shortcut.record" = "to record";
+"main.view.enable.microphone" = "Enable Microphone";
+"main.view.recording.instruction" = "Click stop button when finished";
+"main.view.processing.transcription" = "Processing transcription...";
+
+/* Model Descriptions */
+"settings.view.model.selection.subtitle" = "Larger models provide better accuracy but use more storage";
+"settings.model.tiny.description" = "Fast, suitable for simple speech";
+"settings.model.base.description" = "Balanced speed and accuracy";
+"settings.model.small.description" = "Good accuracy, recommended";
+"settings.model.medium.description" = "High accuracy, slower";
+"settings.model.large.description" = "Best accuracy, very slow";
+
+/* Settings */
+"settings.close.tooltip" = "Close settings";
+"settings.reset.button" = "Reset";
+"settings.reset.tooltip" = "Reset to default settings";
+"settings.reset.confirmation.title" = "Reset Settings?";
+"settings.reset.confirmation.message" = "This will reset all settings to their default values. This action cannot be undone.";
+"settings.reset.confirmation.reset" = "Reset";
+
+/* Tutorial */
+"tutorial.skip.button" = "Skip";
+
+/* System Health Check */
+"healthcheck.mic.permission.denied" = "Microphone permission not granted";
+"healthcheck.mic.permission.suggestion" = "Grant microphone permission in system settings";
+"healthcheck.audio.no.device" = "No audio input device detected";
+"healthcheck.audio.device.suggestion" = "Connect microphone or check audio settings";
+"healthcheck.storage.insufficient" = "Insufficient storage space";
+"healthcheck.storage.suggestion" = "Need at least %.1fGB available space, currently %.1fGB available";
+"healthcheck.memory.insufficient" = "Memory may be insufficient";
+"healthcheck.memory.suggestion" = "Recommend at least 4GB memory for best experience, currently %.1fGB";
+"healthcheck.network.unavailable" = "Network connection unavailable";
+"healthcheck.network.suggestion" = "Cannot download model, network connection required";
+"healthcheck.os.unsupported" = "macOS version too low";
+"healthcheck.os.suggestion" = "Requires macOS 15.5 or higher";
+"healthcheck.cpu.intel" = "Using Intel CPU";
+"healthcheck.cpu.suggestion" = "Better performance on Apple Silicon devices";
+"healthcheck.vm.detected" = "Running in virtual machine";
+"healthcheck.vm.suggestion" = "Audio processing performance may be affected";
+"healthcheck.load.high" = "High system load";
+"healthcheck.load.suggestion" = "Close other applications to free up resources";
+"healthcheck.permission.microphone" = "Microphone";
+"healthcheck.permission.notifications" = "Notifications";
+"healthcheck.report.title" = "VocalText System Health Report";
+"healthcheck.report.status" = "Status";
+"healthcheck.report.time" = "Check Time";
+"healthcheck.report.no.issues" = "✅ No health issues found";
+"healthcheck.report.issues.found" = "⚠️ Found %d issues";
+"healthcheck.report.suggestion" = "Suggestion";
+"healthcheck.report.system.info" = "System Information";
+"healthcheck.report.macos.version" = "macOS Version";
+"healthcheck.report.cpu.arch" = "CPU Architecture";
+"healthcheck.report.storage.available" = "Available Storage";
+"healthcheck.report.memory.available" = "Available Memory";
+"healthcheck.status.healthy.message" = "System status good, all features available";
+"healthcheck.status.warning.message" = "Some warnings found, core features available. Check specific issues";
+"healthcheck.status.error.message" = "Serious issues found, some features may not work. Please check and fix";
+"healthcheck.status.checking.message" = "Checking system status...";

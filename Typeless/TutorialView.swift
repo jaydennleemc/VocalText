@@ -10,140 +10,272 @@ import SwiftUI
 struct TutorialStep {
     let title: String
     let description: String
-    let imageName: String?
-    let contentImageName: String?
+    let icon: String
+    let iconColor: Color
+    let gradient: [Color]
 }
 
 struct TutorialView: View {
     @Binding var isPresented: Bool
     @State private var currentStep = 0
-    @State private var isAnimating = false
+    @State private var iconScale: CGFloat = 0.8
+    @State private var iconOpacity: Double = 0
     var onTutorialCompleted: (() -> Void)? = nil
     
     let steps = [
         TutorialStep(
             title: NSLocalizedString("tutorial.step1.title", comment: ""),
             description: NSLocalizedString("tutorial.step1.description", comment: ""),
-            imageName: nil,
-            contentImageName: "waveform"
+            icon: "waveform",
+            iconColor: .blue,
+            gradient: [.blue.opacity(0.15), .purple.opacity(0.1)]
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step2.title", comment: ""),
             description: NSLocalizedString("tutorial.step2.description", comment: ""),
-            imageName: nil,
-            contentImageName: "mic.circle.fill"
+            icon: "mic.circle.fill",
+            iconColor: .red,
+            gradient: [.red.opacity(0.15), .orange.opacity(0.1)]
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step3.title", comment: ""),
             description: NSLocalizedString("tutorial.step3.description", comment: ""),
-            imageName: nil,
-            contentImageName: "text.alignleft"
+            icon: "text.bubble.fill",
+            iconColor: .green,
+            gradient: [.green.opacity(0.15), .mint.opacity(0.1)]
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step4.title", comment: ""),
             description: NSLocalizedString("tutorial.step4.description", comment: ""),
-            imageName: nil,
-            contentImageName: "gear"
+            icon: "gearshape.fill",
+            iconColor: .purple,
+            gradient: [.purple.opacity(0.15), .pink.opacity(0.1)]
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step5.title", comment: ""),
             description: NSLocalizedString("tutorial.step5.description", comment: ""),
-            imageName: nil,
-            contentImageName: "checkmark.circle.fill"
+            icon: "checkmark.circle.fill",
+            iconColor: .green,
+            gradient: [.green.opacity(0.15), .teal.opacity(0.1)]
         )
     ]
     
     var body: some View {
-        VStack(spacing: 20) {
-            // 标题
-            Text(steps[currentStep].title)
-                .font(.title2)
-                .fontWeight(.bold)
-                .multilineTextAlignment(.center)
-                .padding(.top, 30)
-                .padding(.horizontal, 20)
+        VStack(spacing: 0) {
+            // Header with skip button
+            HStack {
+                Spacer()
+                
+                Button(action: skipTutorial) {
+                    Text("tutorial.skip.button")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
             
-            // 描述
-            Text(steps[currentStep].description)
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
-                .frame(maxWidth: 300)
+            // Progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.1))
+                        .frame(height: 3)
+                    
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.blue, .purple],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * CGFloat(currentStep + 1) / CGFloat(steps.count), height: 3)
+                        .animation(.spring(response: 0.4), value: currentStep)
+                }
+            }
+            .frame(height: 3)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
             
-            // 图标或图像
-            if let imageName = steps[currentStep].imageName {
-                Image(imageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 200, height: 150)
-                    .padding()
-            } else if let contentImageName = steps[currentStep].contentImageName {
-                Image(systemName: contentImageName)
-                    .font(.system(size: 50))
-                    .foregroundColor(.blue)
-                    .padding()
+            // Main content
+            ZStack {
+                ForEach(0..<steps.count, id: \.self) { index in
+                    TutorialStepView(step: steps[index])
+                        .opacity(currentStep == index ? 1 : 0)
+                        .scaleEffect(currentStep == index ? 1 : 0.9)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: currentStep)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            
+            // Bottom controls
+            VStack(spacing: 16) {
+                // Step dots
+                HStack(spacing: 8) {
+                    ForEach(0..<steps.count, id: \.self) { index in
+                        Capsule()
+                            .fill(index == currentStep ? Color.accentColor : Color.secondary.opacity(0.2))
+                            .frame(width: index == currentStep ? 20 : 8, height: 8)
+                            .animation(.spring(response: 0.3), value: currentStep)
+                    }
+                }
+                
+                // Navigation buttons
+                HStack(spacing: 12) {
+                    if currentStep > 0 {
+                        Button(action: previousStep) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .frame(width: 40, height: 40)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    
+                    Button(action: nextStep) {
+                        HStack(spacing: 6) {
+                            Text(currentStep == steps.count - 1 ? "tutorial.start.using.button" : "tutorial.next.button")
+                                .font(.system(size: 14, weight: .semibold))
+                            
+                            if currentStep < steps.count - 1 {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(
+                            LinearGradient(
+                                colors: [.blue, .purple.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .clipShape(Capsule())
+                        .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+        }
+        .frame(width: 400, height: 380)
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+    
+    private func nextStep() {
+        if currentStep < steps.count - 1 {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                currentStep += 1
+            }
+        } else {
+            completeTutorial()
+        }
+    }
+    
+    private func previousStep() {
+        if currentStep > 0 {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                currentStep -= 1
+            }
+        }
+    }
+    
+    private func skipTutorial() {
+        UserDefaults.standard.set(true, forKey: "HasCompletedTutorial")
+        onTutorialCompleted?()
+        
+        withAnimation(.easeOut(duration: 0.2)) {
+            isPresented = false
+        }
+    }
+    
+    private func completeTutorial() {
+        UserDefaults.standard.set(true, forKey: "HasCompletedTutorial")
+        onTutorialCompleted?()
+        
+        withAnimation(.easeOut(duration: 0.2)) {
+            isPresented = false
+        }
+    }
+}
+
+// MARK: - Tutorial Step View
+
+struct TutorialStepView: View {
+    let step: TutorialStep
+    @State private var iconScale: CGFloat = 0.5
+    @State private var iconOpacity: Double = 0
+    @State private var textOffset: CGFloat = 20
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            // Animated icon
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: step.gradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 100, height: 100)
+                
+                Image(systemName: step.icon)
+                    .font(.system(size: 44))
+                    .foregroundColor(step.iconColor)
+                    .scaleEffect(iconScale)
+                    .opacity(iconOpacity)
+            }
+            .onAppear {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+                    iconScale = 1.0
+                    iconOpacity = 1.0
+                }
+            }
+            .onDisappear {
+                iconScale = 0.5
+                iconOpacity = 0
+            }
+            
+            VStack(spacing: 8) {
+                Text(step.title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                
+                Text(step.description)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .frame(maxWidth: 280)
+                    .offset(y: textOffset)
+                    .opacity(1 - Double(textOffset) / 20)
+            }
+            .onAppear {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                    textOffset = 0
+                }
             }
             
             Spacer()
-            
-            // 步骤指示器
-            HStack {
-                ForEach(0..<steps.count, id: \.self) { index in
-                    Circle()
-                        .fill(currentStep == index ? Color.blue : Color.gray)
-                        .frame(width: 10, height: 10)
-                }
-            }
-            
-            // 按钮
-            HStack {
-                if currentStep == 0 {
-                    Spacer()
-                } else {
-                    Button("tutorial.previous.button") {
-                        withAnimation {
-                            currentStep -= 1
-                        }
-                    }
-                    .padding(8)
-                    .foregroundColor(.gray)
-                    .cornerRadius(6)
-                }
-                
-                Spacer()
-                
-                if currentStep == steps.count - 1 {
-                    Button("tutorial.start.using.button") {
-                        // 保存教程已完成的状态
-                        UserDefaults.standard.set(true, forKey: "HasCompletedTutorial")
-                        // 调用完成回调（请求麦克风权限）
-                        onTutorialCompleted?()
-                        isPresented = false
-                    }
-                    .padding(8)
-                    .foregroundColor(.blue)
-                    .cornerRadius(6)
-                } else {
-                    Button("tutorial.next.button") {
-                        withAnimation {
-                            currentStep += 1
-                        }
-                    }
-                    .padding(8)
-                    .foregroundColor(.blue)
-                    .cornerRadius(6)
-                }
-            }
-            .padding(.bottom, 20)
         }
-        .frame(width: 400, height: 300)
+        .padding(.horizontal, 20)
     }
 }
 
 #Preview {
     TutorialView(isPresented: .constant(true))
 }
-
-#Preview {
-  TutorialView(isPresented: .constant(true))
- }

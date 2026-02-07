@@ -466,6 +466,427 @@ struct WaveAnimation: View {
     }
 }
 
+// MARK: - Recording Button
+
+struct RecordingButton: View {
+    let isRecording: Bool
+    let isDisabled: Bool
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    @State private var pulseScale: CGFloat = 1.0
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                // Outer pulse ring when recording
+                if isRecording {
+                    Circle()
+                        .stroke(Color.red.opacity(0.3), lineWidth: 2)
+                        .frame(width: 72, height: 72)
+                        .scaleEffect(pulseScale)
+                        .opacity(2 - pulseScale)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: false)) {
+                                pulseScale = 1.3
+                            }
+                        }
+                        .onDisappear {
+                            pulseScale = 1.0
+                        }
+                }
+                
+                // Button background
+                Circle()
+                    .fill(isRecording ? Color.red : Color.blue)
+                    .frame(width: 64, height: 64)
+                    .shadow(
+                        color: (isRecording ? Color.red : Color.blue).opacity(0.3),
+                        radius: isPressed ? 4 : 8,
+                        x: 0,
+                        y: isPressed ? 2 : 4
+                    )
+                
+                // Icon
+                Image(systemName: isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.5 : 1.0)
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+    }
+}
+
+// MARK: - Status Card
+
+struct StatusCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String?
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(color)
+                .frame(width: 40, height: 40)
+                .background(color.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Transcription Card
+
+struct TranscriptionCard: View {
+    let text: String
+    let isEmpty: Bool
+    let onCopy: () -> Void
+    
+    @State private var showCopiedIndicator = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Content only - no header
+            ScrollView {
+                Text(isEmpty ? NSLocalizedString("recording.state.ready", comment: "Ready to record") : text)
+                    .font(.system(size: 14))
+                    .lineSpacing(4)
+                    .foregroundColor(isEmpty ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+            .frame(maxHeight: 120)
+            
+            Divider()
+            
+            // Footer with copy button
+            HStack {
+                Spacer()
+                
+                if showCopiedIndicator {
+                    Label("main.view.copied", systemImage: "checkmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.green)
+                        .transition(.opacity)
+                } else if !isEmpty {
+                    Button(action: {
+                        onCopy()
+                        withAnimation {
+                            showCopiedIndicator = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation {
+                                showCopiedIndicator = false
+                            }
+                        }
+                    }) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(NSLocalizedString("main.view.copy.tooltip", comment: "Copy to clipboard"))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.05))
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Keyboard Shortcut Hint
+
+struct KeyboardShortcutHint: View {
+    let shortcut: String
+    let descriptionKey: LocalizedStringKey
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(shortcut)
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            
+            Text(descriptionKey)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+// MARK: - Loading State View
+
+struct LoadingStateView: View {
+    let titleKey: LocalizedStringKey
+    let subtitleKey: LocalizedStringKey?
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle())
+                .scaleEffect(1.2)
+            
+            VStack(spacing: 4) {
+                Text(titleKey)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                
+                if let subtitleKey = subtitleKey {
+                    Text(subtitleKey)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Download Progress View
+
+struct DownloadProgressView: View {
+    let status: String
+    let progress: Double
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(.blue)
+            
+            VStack(spacing: 8) {
+                Text(status)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                
+                ProgressView(value: progress)
+                    .progressViewStyle(LinearProgressViewStyle())
+                    .frame(width: 200)
+                
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Processing State View
+
+struct ProcessingStateView: View {
+    @State private var rotation: Double = 0
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 3)
+                    .frame(width: 48, height: 48)
+                
+                Circle()
+                    .trim(from: 0, to: 0.3)
+                    .stroke(Color.blue, lineWidth: 3)
+                    .frame(width: 48, height: 48)
+                    .rotationEffect(.degrees(rotation))
+                    .onAppear {
+                        withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                            rotation = 360
+                        }
+                    }
+            }
+            
+            Text("main.view.processing.transcription")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Recording State View
+
+struct RecordingStateView: View {
+    @Binding var volumeLevel: Double
+    let recordingTime: TimeInterval
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            VoiceMemoWaveformView(volumeLevel: $volumeLevel)
+                .frame(height: 80)
+            
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+                
+                Text(formatTime(recordingTime))
+                    .font(.system(size: 24, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+            }
+            
+            Text("main.view.recording.instruction")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func formatTime(_ timeInterval: TimeInterval) -> String {
+        let minutes = Int(timeInterval) / 60
+        let seconds = Int(timeInterval) % 60
+        let centiseconds = Int((timeInterval.truncatingRemainder(dividingBy: 1)) * 100)
+        return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
+    }
+}
+
+// MARK: - Permission Required View
+
+struct PermissionRequiredView: View {
+    let onRequestPermission: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "mic.slash.circle.fill")
+                .font(.system(size: 56))
+                .foregroundColor(.orange)
+            
+            VStack(spacing: 8) {
+                Text("main.view.microphone.permission.needed")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text("main.view.microphone.permission.description")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 280)
+            }
+            
+            Button(action: onRequestPermission) {
+                Label("main.view.enable.microphone", systemImage: "mic.fill")
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - No Audio Device View
+
+struct NoAudioDeviceView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "speaker.slash.circle.fill")
+                .font(.system(size: 56))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 8) {
+                Text("main.view.no.audio.input.device.detected.title")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text("main.view.connect.audio.input.device.prompt")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 280)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Transcription State View
+
+struct TranscriptionStateView: View {
+    let transcript: String
+    let onCopy: () -> Void
+    
+    @State private var showCopiedIndicator = false
+    
+    private var isEmpty: Bool {
+        transcript == NSLocalizedString("recording.state.ready", comment: "Ready to record")
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                Text(isEmpty ? NSLocalizedString("recording.state.ready", comment: "Ready to record") : transcript)
+                    .font(.system(size: 14))
+                    .lineSpacing(4)
+                    .foregroundColor(isEmpty ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+}
+
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
 struct MainView: View {
     @StateObject private var audioTranscriber = AudioTranscriber()
     @State private var isRecording = false
@@ -485,6 +906,8 @@ struct MainView: View {
     @State private var hasCheckedModelStatus = false
     @State private var hasAudioInputDevices = true // 新增状态，用于跟踪是否有音频输入设备
     @State private var isDownloadingModel = false // 新增状态，用于跟踪是否正在下载模型
+    @AppStorage("selectedLanguage") private var uiLanguage: String = "en"
+    @State private var viewRefreshID = UUID()
 
     // 错误系统
     @State private var currentError: TypelessError?
@@ -496,225 +919,148 @@ struct MainView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            // 主页面内容
-            VStack {
+            // Main content
+            VStack(spacing: 0) {
+                // Header
                 HStack {
+                    // App icon and title
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.accentColor)
+                        
+                        Text("Typeless")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    
                     Spacer()
                     
                     Button(action: {
-                        // 显示设置界面
                         showSettingsView = true
                     }) {
-                        Image(systemName: "gear")
-                            .foregroundColor(.gray)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding(.top, 12)
-                    .padding(.trailing, 16)
-                    .disabled(audioTranscriber.isRecording || audioTranscriber.isTranscribing || showTutorialView) // 录音、转录或教程期间禁用设置按钮
-                }
-                .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏设置按钮
-                
-                Spacer()
-                
-                // 显示下载进度、转录文本或处理中状态
-                if !hasCheckedModelStatus {
-                    // 还未检查模型状态，显示加载状态
-                    VStack {
-                        Text("main.view.checking.model.status")
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                            .padding()
-                    }
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
-                } else if isCheckingMicrophonePermission {
-                    // 正在检查麦克风权限，显示加载状态
-                    VStack {
-                        Text("main.view.requesting.microphone.permission")
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                            .padding()
-                    }
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
-                } else if audioTranscriber.isDownloading || isModelDownloading {
-                    VStack {
-                        Text(audioTranscriber.downloadStatus)
-                        ProgressView(value: audioTranscriber.downloadProgress)
-                            .progressViewStyle(LinearProgressViewStyle())
-                            .padding()
-                    }
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏内容
-                } else if audioTranscriber.isTranscribing {
-                    // 显示转录处理中状态
-                    VStack {
-                        Spacer()
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                            .scaleEffect(1.0)
-                        Spacer()
-                    }
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏内容
-                } else {
-                    Group {
-                        if isRecording {
-                            // 使用类似iOS语音备忘录的波形视图
-                            VStack {
-                                VoiceMemoWaveformView(volumeLevel: $audioTranscriber.volumeLevel)
-                                
-                                // 添加录音时间显示
-                                Text(formatTime(audioTranscriber.recordingTime))
-                                    .font(.body)  // 使用稍大的字体
-                                    .foregroundColor(.secondary)
-                                    .padding(.top, 12)  // 增加顶部间距
-                            }
-                        } else {
-                            // 根据权限状态显示不同的文本
-                            if !hasMicrophonePermission && hasRequestedMicrophonePermission {
-                                // 用户拒绝了麦克风权限
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Text("main.view.microphone.permission.needed")
-                                        .font(.headline)
-                                    Text("main.view.microphone.permission.description")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                            } else {
-                                // 正常显示转录文本
-                                Group {
-                                    if audioTranscriber.transcript == NSLocalizedString("recording.state.ready", comment: "Ready to record") && !hasAudioInputDevices {
-                                        // 没有音频输入设备时显示麦克风加斜线图标
-                                        VStack {
-                                            Image(systemName: "mic.slash.fill")
-                                                .font(.system(size: 40))
-                                                .foregroundColor(.gray)
-                                            Text("main.view.no.audio.device.detected")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                                .padding(.top, 5)
-                                        }
-                                    } else {
-                                        Text(audioTranscriber.transcript)
-                                            .onTapGesture {
-                                                copyToClipboard(audioTranscriber.transcript)
-                                            }
-                                            .contextMenu {
-                                                Button("main.view.copy.to.clipboard") {
-                                                    copyToClipboard(audioTranscriber.transcript)
-                                                }
-                                            }
-                                    }
-                                }
-                                .opacity(showTutorialView ? 0 : 1) // 当教程显示时隐藏内容
-                            }
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .opacity(showTutorialView ? 0 : 1) // 当教程显示时隐藏内容
-                    .opacity(showSettingsView ? 0 : 1) // 当设置页面显示时隐藏内容
-                }
-                
-                Spacer()
-                
-                Spacer()
-                
-                // 根据状态显示不同的按钮
-                if !hasCheckedModelStatus || isCheckingMicrophonePermission {
-                    // 还未检查模型状态或正在检查麦克风权限，不显示任何按钮
-                    EmptyView()
-                    .opacity(showTutorialView ? 0 : 1) // 当教程显示时隐藏内容
-                } else if !hasMicrophonePermission {
-                    // 请求麦克风权限按钮
-                    Button(action: {
-                        requestMicrophonePermission()
-                    }) {
-                        Text("main.view.get.microphone.permission")
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding()
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏按钮
-                } else if !hasAudioInputDevices {
-                    // 没有音频输入设备，显示提示信息
-                    VStack(spacing: 10) {
-                        Text("main.view.no.audio.input.device.detected.title")
-                            .font(.headline)
-                        Text("main.view.connect.audio.input.device.prompt")
-                            .font(.caption)
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 14))
                             .foregroundColor(.secondary)
+                            .frame(width: 32, height: 32)
+                            .background(Color.secondary.opacity(0.1))
+                            .clipShape(Circle())
                     }
-                    .padding()
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏内容
-                } else {
-                    // 录音按钮
-                    HStack {
-                        Button(action: {
-                            // 只有在有麦克风权限的情况下才开始录音
-                            if hasMicrophonePermission {
-                                isRecording.toggle()
-                                if isRecording {
-                                    // 設置模型並開始錄音
-                                    audioTranscriber.setModel(selectedModel)
-                                    // 设置语言
-                                    if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
-                                        audioTranscriber.setLanguage(savedLanguage)
-                                    }
-                                    // 直接开始录音，模型检查在AudioTranscriber内部处理
-                                    audioTranscriber.startRecording()
-                                } else {
-                                    audioTranscriber.stopRecording()
-                                }
-                            } else {
-                                // 如果没有麦克风权限，请求权限
-                                requestMicrophonePermission()
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(audioTranscriber.isRecording || audioTranscriber.isTranscribing || showTutorialView)
+                    .help("main.view.settings.tooltip")
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+                .opacity(showSettingsView || showTutorialView ? 0 : 1)
+                
+                Divider()
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
+                
+                // Main content area
+                Group {
+                    if !hasCheckedModelStatus {
+                        LoadingStateView(
+                            titleKey: LocalizedStringKey("main.view.checking.model.status"),
+                            subtitleKey: nil
+                        )
+                    } else if isCheckingMicrophonePermission {
+                        LoadingStateView(
+                            titleKey: LocalizedStringKey("main.view.requesting.microphone.permission"),
+                            subtitleKey: nil
+                        )
+                    } else if audioTranscriber.isDownloading || isModelDownloading {
+                        DownloadProgressView(
+                            status: audioTranscriber.downloadStatus,
+                            progress: audioTranscriber.downloadProgress
+                        )
+                    } else if audioTranscriber.isTranscribing {
+                        ProcessingStateView()
+                    } else if isRecording {
+                        RecordingStateView(
+                            volumeLevel: $audioTranscriber.volumeLevel,
+                            recordingTime: audioTranscriber.recordingTime
+                        )
+                    } else if !hasMicrophonePermission && hasRequestedMicrophonePermission {
+                        PermissionRequiredView(onRequestPermission: requestMicrophonePermission)
+                    } else if !hasAudioInputDevices {
+                        NoAudioDeviceView()
+                    } else {
+                        TranscriptionStateView(
+                            transcript: audioTranscriber.transcript,
+                            onCopy: { copyToClipboard(audioTranscriber.transcript) }
+                        )
+                    }
+                }
+                .opacity(showSettingsView || showTutorialView ? 0 : 1)
+                
+                Spacer()
+                
+                Divider()
+                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
+                
+                // Bottom control bar
+                HStack {
+                    // Keyboard shortcut hint
+                    if !isRecording && hasMicrophonePermission && hasAudioInputDevices && !audioTranscriber.isTranscribing {
+                        KeyboardShortcutHint(
+                            shortcut: "⌘R",
+                            descriptionKey: LocalizedStringKey("main.view.shortcut.record")
+                        )
+                    }
+                    
+                    Spacer()
+                    
+                    // Recording button
+                    if hasCheckedModelStatus && !isCheckingMicrophonePermission {
+                        if !hasMicrophonePermission {
+                            Button(action: requestMicrophonePermission) {
+                                Label("main.view.enable.microphone", systemImage: "mic.fill")
+                                    .font(.system(size: 13, weight: .medium))
                             }
-                        }) {
-                            Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(isRecording ? .red : .blue)
+                            .buttonStyle(PrimaryButtonStyle())
+                        } else if hasAudioInputDevices {
+                            RecordingButton(
+                                isRecording: isRecording,
+                                isDisabled: isModelDownloading || showTutorialView,
+                                action: {
+                                    toggleRecording()
+                                }
+                            )
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding()
-                        .disabled(isModelDownloading || showTutorialView) // 下载期间或教程显示时禁用录音按钮
                     }
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1) // 当设置页面或教程显示时隐藏按钮
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .opacity(showSettingsView || showTutorialView ? 0 : 1)
             }
-            .frame(width: 400, height: 300) // 增大窗口尺寸
+            .frame(width: 400, height: 300)
             
-            // 设置页面
+            // Settings overlay
             if showSettingsView {
-                SettingsView(
-                    isPresented: $showSettingsView
-                )
-                .environmentObject(audioTranscriber)
-                .onDisappear {
-                    // 當設置視圖關閉時，重新檢查模型狀態
-                    checkModelStatus()
-                }
+                SettingsView(isPresented: $showSettingsView)
+                    .environmentObject(audioTranscriber)
+                    .onDisappear {
+                        checkModelStatus()
+                    }
             }
             
-            // 教程视图 - 居中显示
+            // Tutorial overlay
             if showTutorialView {
                 TutorialView(
                     isPresented: $showTutorialView,
                     onTutorialCompleted: {
-                        // 只有在还没有检查过麦克风权限时才检查
                         if !hasRequestedMicrophonePermission {
                             checkMicrophonePermission()
                         }
                     }
                 )
-                .transition(.move(edge: .leading))
-                .frame(width: 400, height: 300)
+                .transition(.opacity.combined(with: .scale))
+                .frame(width: 400, height: 380)
             }
-
-            // 错误提示层
+            
+            // Error banner
             if showErrorBanner, let error = currentError {
                 ErrorBanner(
                     message: error.errorDescription ?? "Unknown error",
@@ -722,10 +1068,11 @@ struct MainView: View {
                     onDismiss: dismissError
                 )
                 .padding(.top, 8)
-                .zIndex(1) // 确保在最上层
+                .padding(.horizontal, 12)
+                .zIndex(100)
             }
         }
-        .frame(width: 400, height: 300) // 增大窗口尺寸
+        .frame(width: 400, height: 300)
         .onAppear {
             // 设置委托（仅在第一次时）
             if audioTranscriber.delegate == nil {
@@ -842,6 +1189,10 @@ struct MainView: View {
         .onDisappear {
             cleanupErrorTimer()
         }
+        .onChange(of: uiLanguage) {
+            viewRefreshID = UUID()
+        }
+        .id(viewRefreshID)
     }
     
     // 检查麦克风权限
@@ -1044,6 +1395,24 @@ struct MainView: View {
                     NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
                 }
             }
+        }
+    }
+    
+    // Toggle recording state
+    private func toggleRecording() {
+        if hasMicrophonePermission {
+            isRecording.toggle()
+            if isRecording {
+                audioTranscriber.setModel(selectedModel)
+                if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+                    audioTranscriber.setLanguage(savedLanguage)
+                }
+                audioTranscriber.startRecording()
+            } else {
+                audioTranscriber.stopRecording()
+            }
+        } else {
+            requestMicrophonePermission()
         }
     }
     

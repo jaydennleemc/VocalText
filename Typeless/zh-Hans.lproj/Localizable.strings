@@ -112,3 +112,69 @@
 "ui.language.en" = "English";
 "ui.language.zh-Hans" = "简体中文";
 "ui.language.zh-Hant" = "繁體中文";
+
+/* New UI Elements */
+"main.view.transcription.title" = "转录结果";
+"main.view.copied" = "已复制！";
+"main.view.copy.tooltip" = "复制到剪贴板";
+"main.view.settings.tooltip" = "设置";
+"main.view.shortcut.record" = "开始录音";
+"main.view.enable.microphone" = "启用麦克风";
+"main.view.recording.instruction" = "完成后点击停止按钮";
+"main.view.processing.transcription" = "正在处理转录...";
+
+/* Model Descriptions */
+"settings.view.model.selection.subtitle" = "更大的模型提供更好的准确性，但占用更多存储空间";
+"settings.model.tiny.description" = "快速，适合简单语音";
+"settings.model.base.description" = "速度和准确性平衡";
+"settings.model.small.description" = "准确性良好，推荐";
+"settings.model.medium.description" = "高准确性，较慢";
+"settings.model.large.description" = "最佳准确性，很慢";
+
+/* Settings */
+"settings.close.tooltip" = "关闭设置";
+"settings.reset.button" = "重置";
+"settings.reset.tooltip" = "重置为默认设置";
+"settings.reset.confirmation.title" = "重置设置？";
+"settings.reset.confirmation.message" = "这将把所有设置重置为默认值。此操作无法撤销。";
+"settings.reset.confirmation.reset" = "重置";
+
+/* Tutorial */
+"tutorial.skip.button" = "跳过";
+
+/* System Health Check */
+"healthcheck.mic.permission.denied" = "麦克风权限未授权";
+"healthcheck.mic.permission.suggestion" = "请在系统设置中授予麦克风权限";
+"healthcheck.audio.no.device" = "未检测到音频输入设备";
+"healthcheck.audio.device.suggestion" = "请连接麦克风或检查音频设置";
+"healthcheck.storage.insufficient" = "存储空间不足";
+"healthcheck.storage.suggestion" = "需要至少 %.1fGB 可用空间，当前可用 %.1fGB";
+"healthcheck.memory.insufficient" = "内存可能不足";
+"healthcheck.memory.suggestion" = "建议至少 4GB 内存以获得最佳体验，当前 %.1fGB";
+"healthcheck.network.unavailable" = "网络连接不可用";
+"healthcheck.network.suggestion" = "无法下载模型，需要网络连接";
+"healthcheck.os.unsupported" = "macOS 版本过低";
+"healthcheck.os.suggestion" = "需要 macOS 15.5 或更高版本";
+"healthcheck.cpu.intel" = "使用 Intel CPU";
+"healthcheck.cpu.suggestion" = "Apple Silicon 设备上性能更佳";
+"healthcheck.vm.detected" = "在虚拟机中运行";
+"healthcheck.vm.suggestion" = "音频处理性能可能受影响";
+"healthcheck.load.high" = "系统负载较高";
+"healthcheck.load.suggestion" = "建议关闭其他应用以释放资源";
+"healthcheck.permission.microphone" = "麦克风";
+"healthcheck.permission.notifications" = "通知";
+"healthcheck.report.title" = "Typeless 系统健康报告";
+"healthcheck.report.status" = "状态";
+"healthcheck.report.time" = "检测时间";
+"healthcheck.report.no.issues" = "✅ 未发现健康问题";
+"healthcheck.report.issues.found" = "⚠️ 发现 %d 个问题";
+"healthcheck.report.suggestion" = "建议";
+"healthcheck.report.system.info" = "系统信息";
+"healthcheck.report.macos.version" = "macOS 版本";
+"healthcheck.report.cpu.arch" = "CPU 架构";
+"healthcheck.report.storage.available" = "可用存储";
+"healthcheck.report.memory.available" = "可用内存";
+"healthcheck.status.healthy.message" = "系统状态良好，可以正常使用所有功能";
+"healthcheck.status.warning.message" = "发现一些警告，但核心功能可用。建议查看具体问题";
+"healthcheck.status.error.message" = "发现严重问题，某些功能可能无法使用。请检查并修复问题";
+"healthcheck.status.checking.message" = "正在检查系统状态...";
