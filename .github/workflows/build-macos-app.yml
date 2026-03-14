@@ -48,9 +48,9 @@ jobs:
           -configuration Release \
           -derivedDataPath DerivedData \
           -destination "platform=macOS,arch=arm64" \
-          CODE_SIGN_IDENTITY="" \
-          CODE_SIGNING_REQUIRED=NO \
-          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=YES \
+          CODE_SIGNING_ALLOWED=YES \
           ONLY_ACTIVE_ARCH=NO \
           clean build
           
@@ -60,6 +60,14 @@ jobs:
           exit 1
         fi
         echo "✅ Build successful"
+        
+    - name: Ad-hoc Sign App
+      run: |
+        # Sign the app with ad-hoc signature for Gatekeeper
+        codesign --force --deep --sign - "DerivedData/Build/Products/Release/Typeless.app"
+        # Verify signature
+        codesign --verify --verbose=2 "DerivedData/Build/Products/Release/Typeless.app"
+        echo "✅ App signed successfully"
         
     - name: Get app version
       id: version
