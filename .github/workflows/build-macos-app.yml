@@ -74,30 +74,35 @@ jobs:
         echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
         echo "BUILD_NUMBER: $BUILD_NUMBER"
     
-    - name: Create build artifacts directory
-      run: mkdir -p build-artifacts
-    
-    - name: Copy app bundle to artifacts directory
-      run: |
-        cp -R DerivedData/Build/Products/Release/Typeless.app build-artifacts/
-        # Also copy dSYM if it exists
-        if [ -d "DerivedData/Build/Products/Release/Typeless.app.dSYM" ]; then
-          cp -R DerivedData/Build/Products/Release/Typeless.app.dSYM build-artifacts/
-        fi
-    
-    - name: Create ZIP archive
+    - name: Create DMG
       run: |
         APP_VERSION=${{ steps.version.outputs.app_version }}
         BUILD_NUMBER=${{ steps.version.outputs.build_number }}
-        cd build-artifacts
-        zip -r "Typeless-$APP_VERSION-build$BUILD_NUMBER.zip" "Typeless.app" "Typeless.app.dSYM" 2>/dev/null || zip -r "Typeless-$APP_VERSION-build$BUILD_NUMBER.zip" "Typeless.app"
-        echo "Created: Typeless-$APP_VERSION-build$BUILD_NUMBER.zip"
+        
+        # Create a temporary directory for DMG contents
+        mkdir -p dmg-staging/Typeless.app
+        cp -R DerivedData/Build/Products/Release/Typeless.app dmg-staging/
+        
+        # Also copy dSYM if it exists
+        if [ -d "DerivedData/Build/Products/Release/Typeless.app.dSYM" ]; then
+          cp -R DerivedData/Build/Products/Release/Typeless.app.dSYM dmg-staging/
+        fi
+        
+        # Create DMG using hdiutil
+        hdiutil create -volname "Typeless" \
+          -volicon "Typeless.app/Contents/Resources/AppIcon.icns" \
+          -fs HFS+ \
+          -srcfolder dmg-staging \
+          -ov -format UDBZ \
+          "Typeless-$APP_VERSION.dmg"
+        
+        echo "Created: Typeless-$APP_VERSION.dmg"
     
-    - name: Upload ZIP as artifact
+    - name: Upload DMG as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Typeless-${{ steps.version.outputs.app_version }}-build${{ steps.version.outputs.build_number }}.zip
-        path: build-artifacts/Typeless-${{ steps.version.outputs.app_version }}-build${{ steps.version.outputs.build_number }}.zip
+        name: Typeless-${{ steps.version.outputs.app_version }}.dmg
+        path: Typeless-${{ steps.version.outputs.app_version }}.dmg
         retention-days: 30
 
   release:
@@ -112,7 +117,7 @@ jobs:
     - name: Download build artifact
       uses: actions/download-artifact@v4
       with:
-        name: Typeless-${{ needs.build.outputs.app_version }}-build${{ needs.build.outputs.build_number }}.zip
+        name: Typeless-${{ needs.build.outputs.app_version }}.dmg
         path: build-artifacts/
     
     - name: Extract version from tag
@@ -141,6 +146,6 @@ jobs:
         body_path: release_notes.md
         draft: false
         prerelease: false
-        files: build-artifacts/*.zip
+        files: build-artifacts/*.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
