@@ -88,9 +88,8 @@ jobs:
           cp -R DerivedData/Build/Products/Release/Typeless.app.dSYM dmg-staging/
         fi
         
-        # Create DMG using hdiutil
+        # Create DMG using hdiutil (without custom icon for compatibility)
         hdiutil create -volname "Typeless" \
-          -volicon "Typeless.app/Contents/Resources/AppIcon.icns" \
           -fs HFS+ \
           -srcfolder dmg-staging \
           -ov -format UDBZ \
