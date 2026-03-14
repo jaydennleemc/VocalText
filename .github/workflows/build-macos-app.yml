@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [ dev ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ dev ]
 
@@ -91,3 +93,50 @@ jobs:
         name: Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
         path: build-artifacts/Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
         retention-days: 30
+
+  release:
+    needs: build
+    runs-on: macos-26
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
+        path: build-artifacts/
+    
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Generate Release Notes
+      run: |
+        # Generate release notes based on commits since last tag
+        echo "## Typeless v${{ steps.version.outputs.version }}" > release_notes.md
+        echo "" >> release_notes.md
+        echo "### Build Information" >> release_notes.md
+        echo "- Version: ${{ env.APP_VERSION }}" >> release_notes.md
+        echo "- Build: ${{ env.BUILD_NUMBER }}" >> release_notes.md
+        echo "- Target: macOS 15.5+" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Changes" >> release_notes.md
+        echo "View [commits](https://github.com/${{ github.repository }}/compare/${{ github.event.base_ref }}...${{ github.sha }}) for details." >> release_notes.md
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Typeless v${{ steps.version.outputs.version }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        files: build-artifacts/*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
