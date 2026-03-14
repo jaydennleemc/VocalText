@@ -626,7 +626,7 @@ struct TranscriptionCard: View {
             .padding(.vertical, 8)
             .background(Color.secondary.opacity(0.05))
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -917,6 +917,14 @@ struct MainView: View {
     @State private var lastError: TypelessError?
     @State private var errorCount = 0
     
+    // 快速录音状态跟踪
+    @State private var isQuickRecording = false // 是否正在进行快速录音
+    @State private var quickRecordStartTime: Date? // 快速录音开始时间
+    @State private var quickRecordCopied = false // 快速录音是否已复制（避免重复复制）
+    
+    // 最短录音时长阈值 (毫秒)
+    private let minimumRecordingDuration: TimeInterval = 0.5
+    
     var body: some View {
         ZStack(alignment: .top) {
             // Main content
@@ -955,9 +963,6 @@ struct MainView: View {
                 .padding(.bottom, 8)
                 .opacity(showSettingsView || showTutorialView ? 0 : 1)
                 
-                Divider()
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
-                
                 // Main content area
                 Group {
                     if !hasCheckedModelStatus {
@@ -987,8 +992,9 @@ struct MainView: View {
                     } else if !hasAudioInputDevices {
                         NoAudioDeviceView()
                     } else {
-                        TranscriptionStateView(
-                            transcript: audioTranscriber.transcript,
+                        TranscriptionCard(
+                            text: audioTranscriber.transcript,
+                            isEmpty: audioTranscriber.transcript == NSLocalizedString("recording.state.ready", comment: "Ready to record"),
                             onCopy: { copyToClipboard(audioTranscriber.transcript) }
                         )
                     }
@@ -997,19 +1003,8 @@ struct MainView: View {
                 
                 Spacer()
                 
-                Divider()
-                    .opacity(showSettingsView || showTutorialView ? 0 : 1)
-                
                 // Bottom control bar
                 HStack {
-                    // Keyboard shortcut hint
-                    if !isRecording && hasMicrophonePermission && hasAudioInputDevices && !audioTranscriber.isTranscribing {
-                        KeyboardShortcutHint(
-                            shortcut: "⌘R",
-                            descriptionKey: LocalizedStringKey("main.view.shortcut.record")
-                        )
-                    }
-                    
                     Spacer()
                     
                     // Recording button
@@ -1036,6 +1031,7 @@ struct MainView: View {
                 .opacity(showSettingsView || showTutorialView ? 0 : 1)
             }
             .frame(width: 400, height: 300)
+            .background(Color.primary.opacity(0.02))
             
             // Settings overlay
             if showSettingsView {
@@ -1173,7 +1169,34 @@ struct MainView: View {
                 // Model download completed
             }
             
-            // 延遲設置設備選擇，確保音頻設備已加載
+            // 注册快速录音开始通知
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("StartQuickRecord"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                self.handleStartQuickRecord()
+            }
+            
+            // 注册快速录音停止通知
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("StopQuickRecord"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                self.handleStopQuickRecord()
+            }
+            
+            // 注册转写停止通知（用于快速录音自动复制）
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("TranscribingStopped"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                self.handleTranscribingStoppedForQuickRecord()
+            }
+            
+            // 延迟设置设备选择，确保音频设备已加载
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 let savedDeviceIndex = UserDefaults.standard.integer(forKey: "SelectedDeviceIndex")
                 if savedDeviceIndex < audioTranscriber.audioDevices.count {
@@ -1449,6 +1472,139 @@ struct MainView: View {
         let seconds = Int(timeInterval) % 60
         let centiseconds = Int((timeInterval.truncatingRemainder(dividingBy: 1)) * 100)  // 百分之一秒
         return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
+    }
+
+    // MARK: - Quick Record Handler Methods
+
+    // 处理快速录音开始
+    private func handleStartQuickRecord() {
+        // 边缘情况：正在转写时忽略新的录音请求
+        if audioTranscriber.isTranscribing {
+            #if DEBUG
+            print("⚠️ Quick Record: 正在转写，忽略开始请求")
+            #endif
+            return
+        }
+        
+        // 边缘情况：如果正在录音，先停止当前录音
+        if isRecording {
+            #if DEBUG
+            print("⚠️ Quick Record: 正在录音，先停止")
+            #endif
+            audioTranscriber.stopRecording()
+            isRecording = false
+        }
+        
+        // 设置快速录音状态
+        isQuickRecording = true
+        quickRecordStartTime = Date()
+        quickRecordCopied = false
+        
+        // 检查麦克风权限
+        if hasMicrophonePermission {
+            audioTranscriber.setModel(selectedModel)
+            if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+                audioTranscriber.setLanguage(savedLanguage)
+            }
+            audioTranscriber.startRecording()
+            isRecording = true
+            
+            #if DEBUG
+            print("🎙️ Quick Record: 开始录音")
+            #endif
+        } else {
+            #if DEBUG
+            print("❌ Quick Record: 无麦克风权限")
+            #endif
+            requestMicrophonePermission()
+        }
+    }
+
+    // 处理快速录音停止
+    private func handleStopQuickRecord() {
+        guard isQuickRecording else { return }
+        
+        // 计算录音时长
+        guard let startTime = quickRecordStartTime else {
+            isQuickRecording = false
+            return
+        }
+        
+        let recordingDuration = Date().timeIntervalSince(startTime)
+        
+        #if DEBUG
+        print("⏹️ Quick Record: 录音时长 = \(String(format: "%.2f", recordingDuration)) 秒")
+        #endif
+        
+        // 检查最短录音时长 (<500ms 不转写)
+        if recordingDuration < minimumRecordingDuration {
+            #if DEBUG
+            print("⚠️ Quick Record: 录音时长 \(String(format: "%.2f", recordingDuration))s < 0.5s，不转写")
+            #endif
+            
+            // 如果正在录音，停止录音
+            if isRecording {
+                audioTranscriber.stopRecording()
+                isRecording = false
+            }
+            
+            // 重置状态
+            isQuickRecording = false
+            quickRecordStartTime = nil
+            
+            // 显示提示（可选）
+            return
+        }
+        
+        // 录音时长足够，停止录音并触发转写
+        if isRecording {
+            audioTranscriber.stopRecording()
+            isRecording = false
+        }
+        
+        #if DEBUG
+        print("✅ Quick Record: 录音时长足够，触发转写")
+        #endif
+    }
+
+    // 处理转写停止（用于快速录音自动复制）
+    private func handleTranscribingStoppedForQuickRecord() {
+        // 只处理快速录音流程
+        guard isQuickRecording else { return }
+        
+        // 避免重复复制
+        guard !quickRecordCopied else {
+            #if DEBUG
+            print("⚠️ Quick Record: 已复制，跳过")
+            #endif
+            return
+        }
+        
+        // 检查转写结果是否有效
+        let transcriptText = audioTranscriber.transcript
+        let isEmptyResult = transcriptText == NSLocalizedString("recording.state.ready", comment: "Ready to record") ||
+                            transcriptText.isEmpty ||
+                            transcriptText == NSLocalizedString("error.transcription.emptyResult", comment: "Empty transcription result")
+        
+        if isEmptyResult {
+            #if DEBUG
+            print("⚠️ Quick Record: 转写结果为空，不复制")
+            #endif
+            isQuickRecording = false
+            quickRecordStartTime = nil
+            return
+        }
+        
+        // 自动复制到剪贴板
+        #if DEBUG
+        print("📋 Quick Record: 复制转写结果到剪贴板")
+        #endif
+        quickRecordCopied = true
+        copyToClipboard(transcriptText)
+        
+        // 重置状态
+        isQuickRecording = false
+        quickRecordStartTime = nil
     }
 
     // MARK: - Error Handling Methods

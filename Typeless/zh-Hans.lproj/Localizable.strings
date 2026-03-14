@@ -139,6 +139,23 @@
 "settings.reset.confirmation.message" = "这将把所有设置重置为默认值。此操作无法撤销。";
 "settings.reset.confirmation.reset" = "重置";
 
+/* Quick Record Shortcut */
+"settings.view.quick.record.shortcut.label" = "快速录音快捷键";
+"settings.view.quick.record.shortcut.subtitle" = "按下快捷键开始录音";
+"settings.view.quick.record.shortcut.enable" = "启用快速录音";
+"settings.view.quick.record.shortcut.record" = "录制快捷键";
+"settings.view.quick.record.shortcut.recording" = "请按下快捷键...";
+"settings.view.quick.record.shortcut.modifier" = "修饰键";
+"settings.view.quick.record.shortcut.key" = "按键";
+"settings.view.quick.record.shortcut.current" = "当前:";
+
+/* Accessibility Permission */
+"settings.view.accessibility.permission.label" = "需要辅助功能权限";
+"settings.view.accessibility.permission.subtitle" = "用于全局键盘快捷键";
+"settings.view.accessibility.permission.description" = "快速录音快捷键需要辅助功能权限才能检测全局键盘事件。请在系统设置中授予权限以启用此功能。";
+"settings.view.accessibility.permission.open.settings" = "打开设置";
+"settings.view.accessibility.permission.check.again" = "重新检查";
+
 /* Tutorial */
 "tutorial.skip.button" = "跳过";
 

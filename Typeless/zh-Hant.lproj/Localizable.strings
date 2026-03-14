@@ -139,6 +139,23 @@
 "settings.reset.confirmation.message" = "這將把所有設置重置為預設值。此操作無法撤銷。";
 "settings.reset.confirmation.reset" = "重置";
 
+/* Quick Record Shortcut */
+"settings.view.quick.record.shortcut.label" = "快速錄音快捷鍵";
+"settings.view.quick.record.shortcut.subtitle" = "按下快捷鍵開始錄音";
+"settings.view.quick.record.shortcut.enable" = "啟用快速錄音";
+"settings.view.quick.record.shortcut.record" = "錄製快捷鍵";
+"settings.view.quick.record.shortcut.recording" = "請按下快捷鍵...";
+"settings.view.quick.record.shortcut.modifier" = "輔助鍵";
+"settings.view.quick.record.shortcut.key" = "按鍵";
+"settings.view.quick.record.shortcut.current" = "目前:";
+
+/* Accessibility Permission */
+"settings.view.accessibility.permission.label" = "需要輔助功能權限";
+"settings.view.accessibility.permission.subtitle" = "用於全域鍵盤快捷鍵";
+"settings.view.accessibility.permission.description" = "快速錄音快捷鍵需要輔助功能權限才能偵測全域鍵盤事件。請在系統設置中授予權限以啟用此功能。";
+"settings.view.accessibility.permission.open.settings" = "打開設置";
+"settings.view.accessibility.permission.check.again" = "重新檢查";
+
 /* Tutorial */
 "tutorial.skip.button" = "跳過";
 

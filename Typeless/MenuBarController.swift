@@ -137,6 +137,16 @@ class MenuBarController: NSObject, MainViewDelegate {
         // 通知 MainView 强制重试下载
         NotificationCenter.default.post(name: Notification.Name("ForceRetryDownload"), object: nil)
     }
+    
+    func startQuickRecord() {
+        // 通知 MainView 开始快速录音
+        NotificationCenter.default.post(name: Notification.Name("StartQuickRecord"), object: nil)
+    }
+    
+    func stopQuickRecord() {
+        // 通知 MainView 停止快速录音
+        NotificationCenter.default.post(name: Notification.Name("StopQuickRecord"), object: nil)
+    }
 
     deinit {
         #if DEBUG

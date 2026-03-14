@@ -139,6 +139,23 @@
 "settings.reset.confirmation.message" = "This will reset all settings to their default values. This action cannot be undone.";
 "settings.reset.confirmation.reset" = "Reset";
 
+/* Quick Record Shortcut */
+"settings.view.quick.record.shortcut.label" = "Quick Record Shortcut";
+"settings.view.quick.record.shortcut.subtitle" = "Press a keyboard shortcut to start recording";
+"settings.view.quick.record.shortcut.enable" = "Enable quick record";
+"settings.view.quick.record.shortcut.record" = "Record Shortcut";
+"settings.view.quick.record.shortcut.recording" = "Press your shortcut...";
+"settings.view.quick.record.shortcut.modifier" = "Modifier";
+"settings.view.quick.record.shortcut.key" = "Key";
+"settings.view.quick.record.shortcut.current" = "Current:";
+
+/* Accessibility Permission */
+"settings.view.accessibility.permission.label" = "Accessibility Permission Required";
+"settings.view.accessibility.permission.subtitle" = "For global keyboard shortcuts";
+"settings.view.accessibility.permission.description" = "Quick Record shortcut requires Accessibility permission to detect global keyboard events. Grant permission in System Settings to enable this feature.";
+"settings.view.accessibility.permission.open.settings" = "Open Settings";
+"settings.view.accessibility.permission.check.again" = "Check Again";
+
 /* Tutorial */
 "tutorial.skip.button" = "Skip";
 

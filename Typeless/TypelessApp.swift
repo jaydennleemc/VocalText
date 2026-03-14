@@ -22,11 +22,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 拷贝预下载的模型到应用程序文档目录
+        registerDefaults()
         copyPreDownloadedModelsIfNeeded()
-
-        // 初始化菜单栏控制器
         menuBarController = MenuBarController()
+    }
+    
+    private func registerDefaults() {
+        let defaultValues: [String: Any] = [
+            "QuickRecordShortcutEnabled": true,
+            "QuickRecordShortcutKey": "cmd+shift+v"
+        ]
+        UserDefaults.standard.register(defaults: defaultValues)
+        
+        #if DEBUG
+        print("📝 UserDefaults defaults registered: enabled=\(UserDefaults.standard.bool(forKey: "QuickRecordShortcutEnabled")), key=\(UserDefaults.standard.string(forKey: "QuickRecordShortcutKey") ?? "nil")")
+        #endif
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

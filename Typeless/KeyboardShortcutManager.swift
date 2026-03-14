@@ -11,8 +11,20 @@ import SwiftUI
 /// 管理全局键盘快捷键
 class KeyboardShortcutManager {
     private var eventMonitor: Any?
+    private var quickRecordKeyUpMonitor: Any?
     private weak var menuBarController: MenuBarController?
     private weak var mainViewDelegate: MainViewDelegate?
+    
+    // MARK: - Quick Record Hold State
+    /// 快速录音按住状态
+    private(set) var isQuickRecordInProgress: Bool = false
+    
+    // MARK: - UserDefaults Keys
+    private let quickRecordShortcutEnabledKey = "QuickRecordShortcutEnabled"
+    private let quickRecordShortcutKeyKey = "QuickRecordShortcutKey"
+    
+    /// 默认快捷键: cmd+shift+v
+    private let defaultQuickRecordShortcut = "cmd+shift+v"
 
     init(menuBarController: MenuBarController) {
         self.menuBarController = menuBarController
@@ -22,9 +34,14 @@ class KeyboardShortcutManager {
 
     /// 设置全局键盘快捷键监听器
     private func setupGlobalHotkeys() {
-        // 监听全局键盘事件（即使应用不在焦点）
+        // 监听全局键盘按下事件（即使应用不在焦点）
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyEvent(event)
+        }
+        
+        // 监听全局键盘释放事件
+        quickRecordKeyUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyUp) { [weak self] event in
+            self?.handleKeyUpEvent(event)
         }
     }
 
@@ -106,6 +123,53 @@ class KeyboardShortcutManager {
             mainViewDelegate?.forceRetryDownload()
             return
         }
+        
+        // 快速录音快捷键按下检测 (cmd+shift+v)
+        if isQuickRecordShortcut(event: event) {
+            #if DEBUG
+            print("⌨️ Quick Record: Key Down detected")
+            #endif
+            isQuickRecordInProgress = true
+            mainViewDelegate?.startQuickRecord()
+        }
+    }
+    
+    /// 处理键盘释放事件
+    private func handleKeyUpEvent(_ event: NSEvent) {
+        // 检查快速录音快捷键是否释放
+        if isQuickRecordInProgress && isQuickRecordShortcut(event: event) {
+            #if DEBUG
+            print("⌨️ Quick Record: Key Up detected")
+            #endif
+            isQuickRecordInProgress = false
+            mainViewDelegate?.stopQuickRecord()
+        }
+    }
+    
+    /// 检查是否为快速录音快捷键
+    private func isQuickRecordShortcut(event: NSEvent) -> Bool {
+        guard UserDefaults.standard.bool(forKey: quickRecordShortcutEnabledKey) else {
+            return false
+        }
+        
+        let shortcutString = UserDefaults.standard.string(forKey: quickRecordShortcutKeyKey) ?? defaultQuickRecordShortcut
+        let parsedShortcut = parseShortcut(shortcutString)
+        
+        let modifiers = event.modifierFlags
+        let hasRequiredModifiers = modifiers.contains(.command) && modifiers.contains(.shift)
+        let characterMatches = event.charactersIgnoringModifiers?.lowercased() == parsedShortcut.key.lowercased()
+        
+        return hasRequiredModifiers && characterMatches
+    }
+    
+    private func parseShortcut(_ shortcutString: String) -> (key: String, modifiers: [String]) {
+        let parts = shortcutString.lowercased().components(separatedBy: "+")
+        
+        guard parts.count >= 2 else {
+            return (key: shortcutString, modifiers: [])
+        }
+        
+        return (key: parts.last ?? "", modifiers: Array(parts.dropLast()))
     }
 
     /// 注册应用内快捷键（通过 NSMenuItem）
@@ -167,6 +231,9 @@ class KeyboardShortcutManager {
         if let eventMonitor = eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
         }
+        if let keyUpMonitor = quickRecordKeyUpMonitor {
+            NSEvent.removeMonitor(keyUpMonitor)
+        }
         #if DEBUG
         print("⌨️ KeyboardShortcutManager deinit")
         #endif
@@ -181,4 +248,6 @@ protocol MainViewDelegate: AnyObject {
     func closePopover()
     func showTutorial()
     func forceRetryDownload()
+    func startQuickRecord()
+    func stopQuickRecord()
 }

@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import ApplicationServices
+import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var audioTranscriber: AudioTranscriber
@@ -16,6 +18,72 @@ struct SettingsView: View {
     @AppStorage("selectedLanguage") private var uiLanguage: String = "en"
     @State private var showResetConfirmation = false
     @State private var viewRefreshID = UUID()
+    
+    // Accessibility Permission State
+    @AppStorage("AccessibilityPermissionChecked") private var accessibilityPermissionChecked = false
+    @State private var hasAccessibilityPermission = false
+    
+    // Quick Record Shortcut Settings
+    @AppStorage("QuickRecordShortcutEnabled") private var shortcutEnabled = true
+    @AppStorage("QuickRecordShortcut") private var shortcutString = "cmd+v"
+    @State private var isRecordingShortcut = false
+    @State private var eventMonitor: Any?
+    
+    private func startRecordingShortcut() {
+        isRecordingShortcut = true
+        
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Ignore if holding escape to cancel
+            if event.keyCode == 53 {
+                DispatchQueue.main.async {
+                    isRecordingShortcut = false
+                    eventMonitor = nil
+                }
+                return nil
+            }
+            
+            // Build shortcut string from modifiers and key
+            var modifierParts: [String] = []
+            if event.modifierFlags.contains(.command) { modifierParts.append("cmd") }
+            if event.modifierFlags.contains(.option) { modifierParts.append("option") }
+            if event.modifierFlags.contains(.control) { modifierParts.append("control") }
+            if event.modifierFlags.contains(.shift) { modifierParts.append("shift") }
+            
+            // Get the key character
+            let keyChar = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            
+            // Require at least one modifier + a valid key
+            if !modifierParts.isEmpty && !keyChar.isEmpty {
+                modifierParts.append(keyChar)
+                let shortcut = modifierParts.joined(separator: "+")
+                
+                DispatchQueue.main.async {
+                    shortcutString = shortcut
+                    isRecordingShortcut = false
+                    eventMonitor = nil
+                }
+            }
+            
+            return nil
+        }
+    }
+    
+    private func openAccessibilitySettings() {
+        // 先尝试触发系统权限对话框
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        
+        if !trusted {
+            // 如果对话框没显示，直接打开系统设置
+            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+            NSWorkspace.shared.open(url)
+        }
+    }
+    
+    private func checkAccessibilityPermission() {
+        hasAccessibilityPermission = AXIsProcessTrusted()
+        accessibilityPermissionChecked = true
+    }
 
     let models = [
         ("tiny", "~75MB", "settings.model.tiny.description"),
@@ -189,6 +257,67 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    
+                    // Quick Record Shortcut Card
+                    SettingsCard(
+                        icon: "keyboard",
+                        iconColor: .red,
+                        title: LocalizedStringKey("settings.view.quick.record.shortcut.label"),
+                        subtitle: LocalizedStringKey("settings.view.quick.record.shortcut.subtitle")
+                    ) {
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text(LocalizedStringKey("settings.view.quick.record.shortcut.enable"))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Toggle("", isOn: $shortcutEnabled)
+                                    .toggleStyle(SwitchToggleStyle())
+                                    .labelsHidden()
+                            }
+                            
+                            if shortcutEnabled {
+                                HStack(spacing: 16) {
+                                    Button(action: {
+                                        startRecordingShortcut()
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: isRecordingShortcut ? "record.circle" : "keyboard")
+                                                .font(.system(size: 12))
+                                            Text(isRecordingShortcut ? NSLocalizedString("settings.view.quick.record.shortcut.recording", comment: "Press your shortcut...") : NSLocalizedString("settings.view.quick.record.shortcut.record", comment: "Record Shortcut"))
+                                                .font(.system(size: 12))
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(isRecordingShortcut ? Color.red.opacity(0.15) : Color.accentColor.opacity(0.1))
+                                        .foregroundColor(isRecordingShortcut ? .red : .accentColor)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .disabled(isRecordingShortcut)
+                                    
+                                    Spacer()
+                                }
+                                
+                                HStack(spacing: 4) {
+                                    Text(LocalizedStringKey("settings.view.quick.record.shortcut.current"))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                    Text(currentShortcutDisplay)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.accentColor)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Accessibility Permission Warning
+                    if !hasAccessibilityPermission {
+                        AccessibilityPermissionCard(
+                            onOpenSettings: openAccessibilitySettings,
+                            onCheckAgain: checkAccessibilityPermission
+                        )
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -228,10 +357,37 @@ struct SettingsView: View {
             .padding(.vertical, 12)
         }
         .frame(width: 400, height: 300)
+        .onAppear {
+            checkAccessibilityPermission()
+        }
         .onChange(of: uiLanguage) {
             viewRefreshID = UUID()
         }
         .id(viewRefreshID)
+    }
+    
+    private var currentShortcutDisplay: String {
+        // Parse shortcutString like "cmd+shift+v" and display as "⌘⇧V"
+        let parts = shortcutString.lowercased().components(separatedBy: "+")
+        var display = ""
+        var hasModifier = false
+        
+        for part in parts {
+            switch part {
+            case "cmd": display += "⌘"; hasModifier = true
+            case "option", "opt": display += "⌥"; hasModifier = true
+            case "control", "ctrl": display += "⌃"; hasModifier = true
+            case "shift": display += "⇧"; hasModifier = true
+            default: display += part.uppercased()
+            }
+        }
+        
+        // If no modifiers, just show the key
+        if !hasModifier && parts.count == 1 {
+            return parts[0].uppercased()
+        }
+        
+        return display.isEmpty ? "⌘V" : display
     }
     
     private func saveSettings() {
@@ -455,6 +611,67 @@ struct LanguageOptionRow: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct AccessibilityPermissionCard: View {
+    let onOpenSettings: () -> Void
+    let onCheckAgain: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.orange)
+                    .frame(width: 28, height: 28)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(LocalizedStringKey("settings.view.accessibility.permission.label"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text(LocalizedStringKey("settings.view.accessibility.permission.subtitle"))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            
+            Text(LocalizedStringKey("settings.view.accessibility.permission.description"))
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(3)
+            
+            Text("1. 确保应用已在「应用程序」文件夹中\n2. 点击下方按钮打开系统设置\n3. 在列表中找到 Typeless 并开启")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .lineLimit(4)
+            
+            HStack(spacing: 12) {
+                Button(action: onOpenSettings) {
+                    Label(LocalizedStringKey("settings.view.accessibility.permission.open.settings"), systemImage: "gear")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(SettingsPrimaryButtonStyle())
+                
+                Button(action: onCheckAgain) {
+                    Label(LocalizedStringKey("settings.view.accessibility.permission.check.again"), systemImage: "arrow.clockwise")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(SettingsSecondaryButtonStyle())
+            }
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
     }
 }
 
