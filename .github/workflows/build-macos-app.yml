@@ -16,6 +16,9 @@ jobs:
           - xcode: "26.0"
             deployment_target: "15.5"
     runs-on: macos-26
+    outputs:
+      app_version: ${{ steps.version.outputs.app_version }}
+      build_number: ${{ steps.version.outputs.build_number }}
     
     steps:
     - name: Checkout code
@@ -59,16 +62,17 @@ jobs:
         echo "✅ Build successful"
         
     - name: Get app version
+      id: version
       run: |
         # Get the app version from the project
         APP_VERSION=$(defaults read "$PWD/DerivedData/Build/Products/Release/Typeless.app/Contents/Info.plist" CFBundleShortVersionString)
-        echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
-        echo "App version: $APP_VERSION"
+        echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
+        echo "APP_VERSION: $APP_VERSION"
         
         # Get build number
         BUILD_NUMBER=$(defaults read "$PWD/DerivedData/Build/Products/Release/Typeless.app/Contents/Info.plist" CFBundleVersion)
-        echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
-        echo "Build number: $BUILD_NUMBER"
+        echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+        echo "BUILD_NUMBER: $BUILD_NUMBER"
     
     - name: Create build artifacts directory
       run: mkdir -p build-artifacts
@@ -83,15 +87,17 @@ jobs:
     
     - name: Create ZIP archive
       run: |
+        APP_VERSION=${{ steps.version.outputs.app_version }}
+        BUILD_NUMBER=${{ steps.version.outputs.build_number }}
         cd build-artifacts
-        zip -r "Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "Typeless.app" "Typeless.app.dSYM" 2>/dev/null || zip -r "Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip" "Typeless.app"
-        echo "Created: Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip"
+        zip -r "Typeless-$APP_VERSION-build$BUILD_NUMBER.zip" "Typeless.app" "Typeless.app.dSYM" 2>/dev/null || zip -r "Typeless-$APP_VERSION-build$BUILD_NUMBER.zip" "Typeless.app"
+        echo "Created: Typeless-$APP_VERSION-build$BUILD_NUMBER.zip"
     
     - name: Upload ZIP as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
-        path: build-artifacts/Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
+        name: Typeless-${{ steps.version.outputs.app_version }}-build${{ steps.version.outputs.build_number }}.zip
+        path: build-artifacts/Typeless-${{ steps.version.outputs.app_version }}-build${{ steps.version.outputs.build_number }}.zip
         retention-days: 30
 
   release:
@@ -106,24 +112,22 @@ jobs:
     - name: Download build artifact
       uses: actions/download-artifact@v4
       with:
-        name: Typeless-${{ env.APP_VERSION }}-build${{ env.BUILD_NUMBER }}.zip
+        name: Typeless-${{ needs.build.outputs.app_version }}-build${{ needs.build.outputs.build_number }}.zip
         path: build-artifacts/
     
     - name: Extract version from tag
       id: version
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "version=$VERSION" >> $GITHUB_OUTPUT
     
     - name: Generate Release Notes
       run: |
-        # Generate release notes based on commits since last tag
         echo "## Typeless v${{ steps.version.outputs.version }}" > release_notes.md
         echo "" >> release_notes.md
         echo "### Build Information" >> release_notes.md
-        echo "- Version: ${{ env.APP_VERSION }}" >> release_notes.md
-        echo "- Build: ${{ env.BUILD_NUMBER }}" >> release_notes.md
+        echo "- Version: ${{ needs.build.outputs.app_version }}" >> release_notes.md
+        echo "- Build: ${{ needs.build.outputs.build_number }}" >> release_notes.md
         echo "- Target: macOS 15.5+" >> release_notes.md
         echo "" >> release_notes.md
         echo "### Changes" >> release_notes.md
