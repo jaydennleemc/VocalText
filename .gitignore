@@ -80,6 +80,7 @@ iOSInjectionProject/
 
 ## Various settings
 *.pbxproj
+!Typeless.xcodeproj/project.pbxproj
 
 # Build artifacts
 .build/
