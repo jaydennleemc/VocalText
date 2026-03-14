@@ -129,6 +129,12 @@ jobs:
       run: |
         echo "## Typeless v${{ steps.version.outputs.version }}" > release_notes.md
         echo "" >> release_notes.md
+        echo "### Installation" >> release_notes.md
+        echo "1. Download the DMG file below" >> release_notes.md
+        echo "2. Double-click to mount the DMG" >> release_notes.md
+        echo "3. Drag **Typeless.app** to your **Applications** folder" >> release_notes.md
+        echo "4. If you see a security warning, right-click the app and select **Open** → **Open**" >> release_notes.md
+        echo "" >> release_notes.md
         echo "### Build Information" >> release_notes.md
         echo "- Version: ${{ needs.build.outputs.app_version }}" >> release_notes.md
         echo "- Build: ${{ needs.build.outputs.build_number }}" >> release_notes.md
