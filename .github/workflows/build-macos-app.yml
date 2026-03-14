@@ -96,6 +96,9 @@ jobs:
           cp -R DerivedData/Build/Products/Release/Typeless.app.dSYM dmg-staging/
         fi
         
+        # Remove quarantine attribute to avoid Gatekeeper issues
+        xattr -cr dmg-staging/Typeless.app
+        
         # Create DMG using hdiutil (without custom icon for compatibility)
         hdiutil create -volname "Typeless" \
           -fs HFS+ \
