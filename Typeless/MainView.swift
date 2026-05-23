@@ -18,17 +18,17 @@ struct ErrorBanner: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: AppConstants.UI.spacingSM) {
             Image(systemName: type.icon)
-                .font(.title2)
+                .font(.system(size: AppConstants.UI.iconMedium))
                 .foregroundColor(type.color)
                 .frame(width: 24, height: 24)
 
             Text(message)
-                .font(.body)
+                .font(.system(size: AppConstants.UI.fontBodyLarge))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .foregroundColor(.primary)
+                .foregroundColor(.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: onDismiss) {
@@ -36,22 +36,22 @@ struct ErrorBanner: View {
                     .font(.caption)
                     .fontWeight(.bold)
                     .frame(width: 20, height: 20)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.textTertiary)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(4)
-            .background(Color.gray.opacity(0.1))
+            .background(Color.bgHover)
             .clipShape(Circle())
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
+        .padding(.vertical, AppConstants.UI.spacingSM)
+        .padding(.horizontal, AppConstants.UI.spacingMD)
         .background(type.backgroundColor)
-        .cornerRadius(8)
+        .cornerRadius(AppConstants.UI.radiusSM)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM)
                 .stroke(type.borderColor, lineWidth: 1)
         )
-        .padding(.horizontal)
+        .padding(.horizontal, AppConstants.UI.spacingSM)
         .transition(
             .asymmetric(
                 insertion: .move(edge: .top).combined(with: .opacity),
@@ -65,62 +65,52 @@ struct ErrorBanner: View {
 
 struct VoiceMemoWaveformView: View {
     @Binding var volumeLevel: Double
-    @State private var bars: [CGFloat] = Array(repeating: 0.1, count: 50)
+    @State private var bars: [CGFloat] = Array(repeating: 0.1, count: AppConstants.Recording.waveformBarCount)
     @State private var lastVolumeUpdate: Date = Date()
-    
+
     var body: some View {
         HStack(spacing: 2) {
             ForEach(0..<bars.count, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [Color.red, Color.red.opacity(0.7)]),
+                            colors: [.recordingRed, .recordingRed.opacity(0.6)],
                             startPoint: .bottom,
                             endPoint: .top
                         )
                     )
-                    .frame(width: 4, height: max(2, bars[index] * 60))
-                    .animation(.easeOut(duration: 0.15), value: bars[index])
+                    .frame(width: AppConstants.UI.waveformBarWidth, height: max(2, bars[index] * AppConstants.UI.waveformHeight))
+                    .animation(.easeOut(duration: AppConstants.Animation.waveformBarDuration), value: bars[index])
             }
         }
-        .frame(height: 60)
-        .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
+        .frame(height: AppConstants.UI.waveformHeight)
+        .onReceive(Timer.publish(every: AppConstants.Recording.waveformTimerInterval, on: .main, in: .common).autoconnect()) { _ in
             updateBars()
         }
-        // 监听音量变化并立即更新
         .onChange(of: volumeLevel) { _ in
             updateBarsWithVolume()
         }
     }
-    
+
     private func updateBars() {
-        // 创建类似iOS语音备忘录的波形效果
-        // 移除第一个条形，创建从右到左的滚动效果
         bars.removeFirst()
-        
-        // 根据音量添加新的条形高度
-        // 使用当前音量级别作为主要因素
         let newBarHeight = CGFloat(volumeLevel)
         bars.append(newBarHeight)
-        
-        // 应用平滑效果，使相邻条形高度变化更自然
+
         if bars.count >= 3 {
             for i in 1..<bars.count-1 {
                 bars[i] = (bars[i-1] + bars[i] + bars[i+1]) / 3
             }
         }
     }
-    
+
     private func updateBarsWithVolume() {
-        // 直接响应音量变化更新最后一个条形
         if !bars.isEmpty {
-            // 使用当前音量级别作为主要因素，添加一些随机性使波形更自然
             let randomFactor = Double.random(in: 0.8...1.2)
             let adjustedVolume = volumeLevel * randomFactor
             let newBarHeight = CGFloat(min(1.0, adjustedVolume))
             bars[bars.count - 1] = newBarHeight
-            
-            // 应用局部平滑效果
+
             let index = bars.count - 1
             if index >= 2 {
                 for i in (index - 2)..<index {
@@ -133,52 +123,28 @@ struct VoiceMemoWaveformView: View {
     }
 }
 
-struct WaveAnimation: View {
-    @State private var waveOffset = 0.0
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<5) { i in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.blue)
-                    .frame(width: 4, height: 20 + CGFloat(sin(waveOffset + Double(i)) * 10))
-                    .animation(
-                        Animation.easeInOut(duration: 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.1),
-                        value: waveOffset
-                    )
-            }
-        }
-        .onAppear {
-            waveOffset = .pi
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 // MARK: - Recording Button
 
 struct RecordingButton: View {
     let isRecording: Bool
     let isDisabled: Bool
     let action: () -> Void
-    
+
     @State private var isPressed = false
     @State private var pulseScale: CGFloat = 1.0
-    
+
     var body: some View {
         Button(action: action) {
             ZStack {
                 // Outer pulse ring when recording
                 if isRecording {
                     Circle()
-                        .stroke(Color.red.opacity(0.3), lineWidth: 2)
-                        .frame(width: 72, height: 72)
+                        .stroke(Color.recordingGlow, lineWidth: 2)
+                        .frame(width: AppConstants.UI.recordButtonRingSize + 8, height: AppConstants.UI.recordButtonRingSize + 8)
                         .scaleEffect(pulseScale)
                         .opacity(2 - pulseScale)
                         .onAppear {
-                            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: false)) {
+                            withAnimation(.easeInOut(duration: AppConstants.Animation.pulseRingDuration).repeatForever(autoreverses: false)) {
                                 pulseScale = 1.3
                             }
                         }
@@ -186,29 +152,29 @@ struct RecordingButton: View {
                             pulseScale = 1.0
                         }
                 }
-                
-                // Button background
+
+                // Button background with gradient
                 Circle()
-                    .fill(isRecording ? Color.red : Color.blue)
-                    .frame(width: 64, height: 64)
+                    .fill(isRecording ? AnyShapeStyle(Color.recordingGradient) : AnyShapeStyle(Color.accentGradient))
+                    .frame(width: AppConstants.UI.recordButtonSize, height: AppConstants.UI.recordButtonSize)
                     .shadow(
-                        color: (isRecording ? Color.red : Color.blue).opacity(0.3),
-                        radius: isPressed ? 4 : 8,
+                        color: (isRecording ? Color.recordingGlow : Color.accentGlow),
+                        radius: isPressed ? 6 : 12,
                         x: 0,
-                        y: isPressed ? 2 : 4
+                        y: isPressed ? 2 : 6
                     )
-                
+
                 // Icon
                 Image(systemName: isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(isDisabled)
-        .opacity(isDisabled ? 0.5 : 1.0)
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.easeInOut(duration: 0.1), value: isPressed)
+        .opacity(isDisabled ? 0.4 : 1.0)
+        .scaleEffect(isPressed ? 0.92 : 1.0)
+        .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: isPressed)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }
@@ -224,39 +190,34 @@ struct StatusCard: View {
     let title: String
     let subtitle: String?
     let color: Color
-    
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: AppConstants.UI.spacingSM) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: AppConstants.UI.iconMedium))
                 .foregroundColor(color)
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
                 .background(color.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            
+                .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-                
+                    .font(.system(size: AppConstants.UI.fontBody, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+
                 if let subtitle = subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: AppConstants.UI.fontCaption))
+                        .foregroundColor(.textSecondary)
                         .lineLimit(1)
                 }
             }
-            
+
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+        .padding(.horizontal, AppConstants.UI.spacingSM)
+        .padding(.vertical, AppConstants.UI.spacingXS)
+        .cardStyle()
     }
 }
 
@@ -266,63 +227,61 @@ struct TranscriptionCard: View {
     let text: String
     let isEmpty: Bool
     let onCopy: () -> Void
-    
+
     @State private var showCopiedIndicator = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
-            // Content only - no header
             ScrollView {
                 Text(isEmpty ? NSLocalizedString("recording.state.ready", comment: "Ready to record") : text)
-                    .font(.system(size: 14))
+                    .font(.system(size: AppConstants.UI.fontBodyLarge))
                     .lineSpacing(4)
-                    .foregroundColor(isEmpty ? .secondary : .primary)
+                    .foregroundColor(isEmpty ? .textTertiary : .textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
+                    .padding(AppConstants.UI.spacingSM)
             }
-            .frame(maxHeight: 120)
-            
-            Divider()
-            
+            .frame(maxHeight: AppConstants.UI.transcriptMaxHeight)
+
+            SectionDivider()
+
             // Footer with copy button
             HStack {
                 Spacer()
-                
+
                 if showCopiedIndicator {
-                    Label("main.view.copied", systemImage: "checkmark")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.green)
-                        .transition(.opacity)
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10))
+                        Text("main.view.copied")
+                            .font(.system(size: AppConstants.UI.fontCaption, weight: .medium))
+                    }
+                    .foregroundColor(.successGreen)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
                 } else if !isEmpty {
                     Button(action: {
                         onCopy()
-                        withAnimation {
+                        withAnimation(.easeInOut(duration: 0.2)) {
                             showCopiedIndicator = true
                         }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.Animation.copiedIndicatorDuration) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
                                 showCopiedIndicator = false
                             }
                         }
                     }) {
                         Image(systemName: "doc.on.doc")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: AppConstants.UI.iconSmall))
+                            .foregroundColor(.textTertiary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .help(NSLocalizedString("main.view.copy.tooltip", comment: "Copy to clipboard"))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.secondary.opacity(0.05))
+            .padding(.horizontal, AppConstants.UI.spacingSM)
+            .padding(.vertical, AppConstants.UI.spacingXS)
+            .background(Color.bgHover.opacity(0.5))
         }
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+        .cardStyle()
     }
 }
 
@@ -331,19 +290,19 @@ struct TranscriptionCard: View {
 struct KeyboardShortcutHint: View {
     let shortcut: String
     let descriptionKey: LocalizedStringKey
-    
+
     var body: some View {
         HStack(spacing: 6) {
             Text(shortcut)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: AppConstants.UI.fontCaption, weight: .medium))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.15))
+                .background(Color.bgHover)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
-            
+
             Text(descriptionKey)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+                .font(.system(size: AppConstants.UI.fontCaption))
+                .foregroundColor(.textSecondary)
         }
     }
 }
@@ -353,22 +312,23 @@ struct KeyboardShortcutHint: View {
 struct LoadingStateView: View {
     let titleKey: LocalizedStringKey
     let subtitleKey: LocalizedStringKey?
-    
+
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: AppConstants.UI.spacingMD) {
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle())
                 .scaleEffect(1.2)
-            
-            VStack(spacing: 4) {
+                .tint(.accentPrimary)
+
+            VStack(spacing: AppConstants.UI.spacingXXS) {
                 Text(titleKey)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
-                
+                    .font(.system(size: AppConstants.UI.fontBodyLarge, weight: .medium))
+                    .foregroundColor(.textPrimary)
+
                 if let subtitleKey = subtitleKey {
                     Text(subtitleKey)
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: AppConstants.UI.fontBody))
+                        .foregroundColor(.textSecondary)
                 }
             }
         }
@@ -381,26 +341,30 @@ struct LoadingStateView: View {
 struct DownloadProgressView: View {
     let status: String
     let progress: Double
-    
+
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 48))
-                .foregroundColor(.blue)
-            
-            VStack(spacing: 8) {
+        VStack(spacing: AppConstants.UI.spacingLG) {
+            IconContainer(
+                icon: "arrow.down.circle.fill",
+                color: .accentPrimary,
+                size: AppConstants.UI.stateIconSize,
+                radius: AppConstants.UI.stateIconRadius
+            )
+
+            VStack(spacing: AppConstants.UI.spacingXS) {
                 Text(status)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
+                    .font(.system(size: AppConstants.UI.fontBodyLarge, weight: .medium))
+                    .foregroundColor(.textPrimary)
                     .multilineTextAlignment(.center)
-                
+
                 ProgressView(value: progress)
                     .progressViewStyle(LinearProgressViewStyle())
+                    .tint(.accentPrimary)
                     .frame(width: 200)
-                
+
                 Text("\(Int(progress * 100))%")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: AppConstants.UI.fontBody, weight: .medium))
+                    .foregroundColor(.textSecondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -411,29 +375,29 @@ struct DownloadProgressView: View {
 
 struct ProcessingStateView: View {
     @State private var rotation: Double = 0
-    
+
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: AppConstants.UI.spacingMD) {
             ZStack {
                 Circle()
-                    .stroke(Color.secondary.opacity(0.2), lineWidth: 3)
+                    .stroke(Color.bgHover, lineWidth: 3)
                     .frame(width: 48, height: 48)
-                
+
                 Circle()
                     .trim(from: 0, to: 0.3)
-                    .stroke(Color.blue, lineWidth: 3)
+                    .stroke(Color.accentGradient, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .frame(width: 48, height: 48)
                     .rotationEffect(.degrees(rotation))
                     .onAppear {
-                        withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                        withAnimation(.linear(duration: AppConstants.Animation.spinnerDuration).repeatForever(autoreverses: false)) {
                             rotation = 360
                         }
                     }
             }
-            
+
             Text("main.view.processing.transcription")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+                .font(.system(size: AppConstants.UI.fontBodyLarge, weight: .medium))
+                .foregroundColor(.textPrimary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -444,29 +408,29 @@ struct ProcessingStateView: View {
 struct RecordingStateView: View {
     @Binding var volumeLevel: Double
     let recordingTime: TimeInterval
-    
+
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: AppConstants.UI.spacingLG) {
             VoiceMemoWaveformView(volumeLevel: $volumeLevel)
-                .frame(height: 80)
-            
-            HStack(spacing: 8) {
+                .frame(height: AppConstants.UI.waveformHeight + 10)
+
+            HStack(spacing: AppConstants.UI.spacingXS) {
                 Circle()
-                    .fill(Color.red)
+                    .fill(Color.recordingRed)
                     .frame(width: 8, height: 8)
-                
+
                 Text(formatTime(recordingTime))
-                    .font(.system(size: 24, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
+                    .font(.system(size: AppConstants.UI.fontTimer, weight: .medium, design: .monospaced))
+                    .foregroundColor(.textPrimary)
             }
-            
+
             Text("main.view.recording.instruction")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .font(.system(size: AppConstants.UI.fontBody))
+                .foregroundColor(.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     private func formatTime(_ timeInterval: TimeInterval) -> String {
         let minutes = Int(timeInterval) / 60
         let seconds = Int(timeInterval) % 60
@@ -479,31 +443,34 @@ struct RecordingStateView: View {
 
 struct PermissionRequiredView: View {
     let onRequestPermission: () -> Void
-    
+
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "mic.slash.circle.fill")
-                .font(.system(size: 56))
-                .foregroundColor(.orange)
-            
-            VStack(spacing: 8) {
+        VStack(spacing: AppConstants.UI.spacingMD) {
+            IconContainer(
+                icon: "mic.slash.circle.fill",
+                color: .warningOrange,
+                size: AppConstants.UI.stateIconSize,
+                radius: AppConstants.UI.stateIconRadius
+            )
+
+            VStack(spacing: AppConstants.UI.spacingXS) {
                 Text("main.view.microphone.permission.needed")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                
+                    .font(.system(size: AppConstants.UI.fontSectionTitle, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+
                 Text("main.view.microphone.permission.description")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: AppConstants.UI.fontBody))
+                    .foregroundColor(.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
             }
-            
+
             Button(action: onRequestPermission) {
                 Label("main.view.enable.microphone", systemImage: "mic.fill")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: AppConstants.UI.fontBody, weight: .medium))
             }
             .buttonStyle(PrimaryButtonStyle())
-            .padding(.top, 8)
+            .padding(.top, AppConstants.UI.spacingXS)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -513,19 +480,22 @@ struct PermissionRequiredView: View {
 
 struct NoAudioDeviceView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "speaker.slash.circle.fill")
-                .font(.system(size: 56))
-                .foregroundColor(.secondary)
-            
-            VStack(spacing: 8) {
+        VStack(spacing: AppConstants.UI.spacingMD) {
+            IconContainer(
+                icon: "speaker.slash.circle.fill",
+                color: .textTertiary,
+                size: AppConstants.UI.stateIconSize,
+                radius: AppConstants.UI.stateIconRadius
+            )
+
+            VStack(spacing: AppConstants.UI.spacingXS) {
                 Text("main.view.no.audio.input.device.detected.title")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                
+                    .font(.system(size: AppConstants.UI.fontSectionTitle, weight: .semibold))
+                    .foregroundColor(.textPrimary)
+
                 Text("main.view.connect.audio.input.device.prompt")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: AppConstants.UI.fontBody))
+                    .foregroundColor(.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
             }
@@ -539,42 +509,42 @@ struct NoAudioDeviceView: View {
 struct TranscriptionStateView: View {
     let transcript: String
     let onCopy: () -> Void
-    
+
     @State private var showCopiedIndicator = false
-    
+
     private var isEmpty: Bool {
         transcript == NSLocalizedString("recording.state.ready", comment: "Ready to record")
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 Text(isEmpty ? NSLocalizedString("recording.state.ready", comment: "Ready to record") : transcript)
-                    .font(.system(size: 14))
+                    .font(.system(size: AppConstants.UI.fontBodyLarge))
                     .lineSpacing(4)
-                    .foregroundColor(isEmpty ? .secondary : .primary)
+                    .foregroundColor(isEmpty ? .textTertiary : .textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, AppConstants.UI.spacingSM)
+                    .padding(.vertical, AppConstants.UI.spacingXS)
             }
             .frame(maxHeight: .infinity)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, AppConstants.UI.spacingMD)
+        .padding(.vertical, AppConstants.UI.spacingXS)
     }
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color.blue)
+            .padding(.horizontal, AppConstants.UI.spacingMD)
+            .padding(.vertical, AppConstants.UI.spacingXS)
+            .background(Color.accentGradient)
             .foregroundColor(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: configuration.isPressed)
     }
 }
 
@@ -602,6 +572,10 @@ struct MainView: View {
         let state = appState
         let transcriber = audioTranscriber
         return ZStack(alignment: .top) {
+            // Background
+            Color.bgPrimary
+                .ignoresSafeArea()
+
             MainContentContainer(
                 state: state,
                 transcriber: transcriber,
@@ -622,6 +596,7 @@ struct MainView: View {
                 ))
                 .environmentObject(transcriber)
                 .onDisappear { checkModelStatus() }
+                .transition(.opacity)
             }
 
             // Tutorial overlay
@@ -638,7 +613,7 @@ struct MainView: View {
                     }
                 )
                 .transition(.opacity.combined(with: .scale))
-                .frame(width: 400, height: 380)
+                .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.tutorialHeight)
             }
 
             // Error banner
@@ -648,12 +623,17 @@ struct MainView: View {
                     type: error.type,
                     onDismiss: { state.dismissError() }
                 )
-                .padding(.top, 8)
-                .padding(.horizontal, 12)
+                .padding(.top, AppConstants.UI.spacingXS)
+                .padding(.horizontal, AppConstants.UI.spacingSM)
                 .zIndex(100)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity
+                ))
             }
         }
         .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.windowHeight)
+        .background(Color.bgPrimary)
         .onAppear { setupOnAppear() }
         .onDisappear { appState.cleanupErrorTimer() }
         .onReceive(NotificationCenter.default.publisher(for: .modelChanged)) { _ in
@@ -692,7 +672,7 @@ struct MainView: View {
 
         let hasCompletedTutorial = UserDefaults.standard.bool(forKey: "HasCompletedTutorial")
         if !hasCompletedTutorial {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.Tutorial.showDelay) {
                 appState.navigate(to: .tutorial)
             }
         }
@@ -708,8 +688,7 @@ struct MainView: View {
 
         checkModelStatus()
 
-        // Delayed device/language setup
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.Device.deviceLoadDelay) {
             let savedDeviceIndex = UserDefaults.standard.integer(forKey: "SelectedDeviceIndex")
             if savedDeviceIndex < audioTranscriber.audioDevices.count {
                 audioTranscriber.setSelectedDevice(index: savedDeviceIndex)
@@ -861,55 +840,6 @@ extension Notification.Name {
     static let recordingStopped = Notification.Name("RecordingStopped")
 }
 
-struct SettingsMenuView: View {
-    @Binding var selectedModel: String
-    @Environment(\.presentationMode) var presentationMode
-    var audioTranscriber: AudioTranscriber
-    
-    let models = ["Tiny", "Base", "Small", "Medium"]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(models, id: \.self) { model in
-                Button(action: {
-                    selectedModel = model
-                    // 这里可以添加实际的模型切换逻辑
-                    // Model selected
-                }) {
-                    HStack {
-                        Text(model)
-                        Spacer()
-                        if model == selectedModel {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                if model != models.last {
-                    Divider()
-                }
-            }
-            
-            Divider()
-            
-            Button(action: {
-                NSApp.terminate(nil)
-            }) {
-                Text("general.quit.button")
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-        .frame(width: 150)
-        .padding(.vertical, 8)
-    }
-}
-
 // MARK: - Main Content Container
 
 private struct MainContentContainer: View {
@@ -925,40 +855,46 @@ private struct MainContentContainer: View {
     var body: some View {
         VStack(spacing: 0) {
             headerView
+            Divider().overlay(Color.borderPrimary)
             contentArea
-            Spacer()
+            Divider().overlay(Color.borderPrimary)
             bottomBar
         }
         .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.windowHeight)
-        .background(Color.primary.opacity(0.02))
+        .background(Color.bgPrimary)
     }
 
     private var headerView: some View {
         HStack {
-            HStack(spacing: 8) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.accentColor)
+            HStack(spacing: AppConstants.UI.spacingXS) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: AppConstants.UI.headerIconRadius)
+                        .fill(Color.accentGradient)
+                        .frame(width: AppConstants.UI.headerIconSize, height: AppConstants.UI.headerIconSize)
+                    Image(systemName: "waveform")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                }
                 Text("Typeless")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .font(.system(size: AppConstants.UI.fontHeader, weight: .semibold))
+                    .foregroundColor(.textPrimary)
             }
             Spacer()
             Button(action: { state.navigate(to: .settings) }) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                    .frame(width: 32, height: 32)
-                    .background(Color.secondary.opacity(0.1))
-                    .clipShape(Circle())
+                    .font(.system(size: AppConstants.UI.iconSmall))
+                    .foregroundColor(.textTertiary)
+                    .frame(width: AppConstants.UI.headerButtonSize, height: AppConstants.UI.headerButtonSize)
+                    .background(Color.bgHover)
+                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
             }
             .buttonStyle(PlainButtonStyle())
             .disabled(transcriber.isRecording || transcriber.isTranscribing || state.navigation == .tutorial)
+            .opacity((transcriber.isRecording || transcriber.isTranscribing || state.navigation == .tutorial) ? 0.4 : 1.0)
             .help("main.view.settings.tooltip")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, AppConstants.UI.spacingMD)
+        .padding(.vertical, AppConstants.UI.spacingSM)
     }
 
     @ViewBuilder
@@ -995,6 +931,8 @@ private struct MainContentContainer: View {
                 isEmpty: transcriber.transcript == NSLocalizedString("recording.state.ready", comment: "Ready to record"),
                 onCopy: onCopy
             )
+            .padding(.horizontal, AppConstants.UI.spacingMD)
+            .padding(.vertical, AppConstants.UI.spacingSM)
         }
     }
 
@@ -1005,7 +943,7 @@ private struct MainContentContainer: View {
                 if !transcriber.hasMicrophonePermission {
                     Button(action: onRequestPermission) {
                         Label("main.view.enable.microphone", systemImage: "mic.fill")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: AppConstants.UI.fontBody, weight: .medium))
                     }
                     .buttonStyle(PrimaryButtonStyle())
                 } else if transcriber.hasAvailableAudioInputDevices() {
@@ -1017,7 +955,7 @@ private struct MainContentContainer: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, AppConstants.UI.spacingMD)
+        .padding(.vertical, AppConstants.UI.spacingSM)
     }
 }
