@@ -1,13 +1,5 @@
-//
-//  AudioTranscriber.swift
-//  Typeless
-//
-//  Created by LEEJAYMC on 16/9/2025.
-//
-
 import Foundation
 import AVFoundation
-import WhisperKit
 import Combine
 
 // MARK: - Audio Transcriber Delegate
@@ -21,7 +13,7 @@ protocol AudioTranscriberDelegate: AnyObject {
 // MARK: - Audio Transcriber (Coordinator)
 
 @MainActor
-class AudioTranscriber: ObservableObject {
+final class AudioTranscriber: ObservableObject {
     // MARK: - Services
 
     let recorder = AudioRecorder()
@@ -70,6 +62,7 @@ class AudioTranscriber: ObservableObject {
     // MARK: - Bindings
 
     private func setupBindings() {
+        // Forward recorder state
         recorder.$isRecording
             .assign(to: &$isRecording)
         recorder.$volumeLevel
@@ -77,6 +70,7 @@ class AudioTranscriber: ObservableObject {
         recorder.$recordingTime
             .assign(to: &$recordingTime)
 
+        // Forward model manager state
         modelManager.$isDownloading
             .assign(to: &$isDownloading)
         modelManager.$downloadProgress
@@ -84,16 +78,19 @@ class AudioTranscriber: ObservableObject {
         modelManager.$downloadStatus
             .assign(to: &$downloadStatus)
 
+        // Forward transcription state
         transcriptionService.$isTranscribing
             .assign(to: &$isTranscribing)
         transcriptionService.$transcript
             .assign(to: &$transcript)
 
+        // Forward device state
         deviceManager.$audioDevices
             .assign(to: &$audioDevices)
         deviceManager.$selectedDeviceIndex
             .assign(to: &$selectedDeviceIndex)
 
+        // Forward permission state
         permissionManager.$hasMicrophonePermission
             .assign(to: &$hasMicrophonePermission)
         permissionManager.$isCheckingPermission
@@ -101,6 +98,7 @@ class AudioTranscriber: ObservableObject {
     }
 
     private func setupNotificationObservers() {
+        // Model errors
         NotificationCenter.default.publisher(for: .modelErrorOccurred)
             .compactMap { $0.object as? TypelessError }
             .sink { [weak self] error in
@@ -108,6 +106,7 @@ class AudioTranscriber: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Transcription errors
         NotificationCenter.default.publisher(for: .transcriptionError)
             .compactMap { $0.object as? TypelessError }
             .sink { [weak self] error in
@@ -124,10 +123,6 @@ class AudioTranscriber: ObservableObject {
 
     func isModelAlreadyDownloaded(model: String) -> Bool {
         modelManager.isModelAlreadyDownloaded(model: model)
-    }
-
-    func isModelAlreadyDownloaded() -> Bool {
-        modelManager.isModelAlreadyDownloaded()
     }
 
     func setModel(_ model: String) {
@@ -252,4 +247,9 @@ class AudioTranscriber: ObservableObject {
     }
 }
 
-// Notification names are defined in MainView.swift
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let recordingStarted = Notification.Name("RecordingStarted")
+    static let recordingStopped = Notification.Name("RecordingStopped")
+}

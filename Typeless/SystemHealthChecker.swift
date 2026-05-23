@@ -212,25 +212,20 @@ class SystemHealthChecker: ObservableObject {
 
     /// 检查网络连接
     func checkNetworkConnectivity() async -> (isConnected: Bool, speed: Double?) {
-        // 简单的网络连接检查
-        let task = URLSession.shared.dataTask(with: URL(string: "https://www.apple.com")!) { _, _, _ in }
+        guard let url = URL(string: "https://www.apple.com") else {
+            return (false, nil)
+        }
 
-        return await withCheckedContinuation { continuation in
-            let timeoutTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-                task.cancel()
-                continuation.resume(returning: (false, nil))
+        do {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 3.0
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return (false, nil)
             }
-
-            task.resume()
-
-            // 使用 Task 监听完成
-            Task {
-                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3秒超时
-                if task.state == .completed {
-                    timeoutTimer.invalidate()
-                    continuation.resume(returning: (true, nil))
-                }
-            }
+            return (httpResponse.statusCode == 200, nil)
+        } catch {
+            return (false, nil)
         }
     }
 

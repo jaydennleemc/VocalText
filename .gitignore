@@ -88,3 +88,7 @@ build-artifacts/
 
 # Macos
 .DS_Store
+
+
+# docs
+docs/
