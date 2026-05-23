@@ -42,13 +42,15 @@ jobs:
     
     - name: Build and Test
       run: |
-        # Build the project first to generate the app bundle
+        # Build with ad-hoc signing for sandboxed app
+        # Sandboxed macOS apps MUST be signed to run
         xcodebuild -project Typeless.xcodeproj \
           -scheme Typeless \
           -configuration Release \
           -derivedDataPath DerivedData \
           -destination "platform=macOS,arch=arm64" \
           CODE_SIGN_IDENTITY="-" \
+          CODE_SIGN_STYLE=Manual \
           CODE_SIGNING_REQUIRED=YES \
           CODE_SIGNING_ALLOWED=YES \
           ONLY_ACTIVE_ARCH=NO \
@@ -61,13 +63,11 @@ jobs:
         fi
         echo "✅ Build successful"
         
-    - name: Ad-hoc Sign App
+    - name: Verify Ad-hoc Signature
       run: |
-        # Sign the app with ad-hoc signature for Gatekeeper
-        codesign --force --deep --sign - "DerivedData/Build/Products/Release/Typeless.app"
-        # Verify signature
+        # Verify the app is properly signed (ad-hoc)
         codesign --verify --verbose=2 "DerivedData/Build/Products/Release/Typeless.app"
-        echo "✅ App signed successfully"
+        echo "✅ App signature verified"
         
     - name: Get app version
       id: version

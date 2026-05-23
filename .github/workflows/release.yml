@@ -49,15 +49,17 @@ jobs:
     
     - name: Build Release
       run: |
-        # Build the project first to generate the app bundle
+        # Build with ad-hoc signing for sandboxed app
+        # Sandboxed macOS apps MUST be signed to run
         xcodebuild -project Typeless.xcodeproj \
           -scheme Typeless \
           -configuration Release \
           -derivedDataPath DerivedData \
           -destination "platform=macOS,arch=arm64" \
-          CODE_SIGN_IDENTITY="" \
-          CODE_SIGNING_REQUIRED=NO \
-          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGN_STYLE=Manual \
+          CODE_SIGNING_REQUIRED=YES \
+          CODE_SIGNING_ALLOWED=YES \
           ONLY_ACTIVE_ARCH=NO \
           clean build
           
@@ -67,6 +69,12 @@ jobs:
           exit 1
         fi
         echo "✅ Build successful"
+        
+    - name: Verify Ad-hoc Signature
+      run: |
+        # Verify the app is properly signed (ad-hoc)
+        codesign --verify --verbose=2 "DerivedData/Build/Products/Release/Typeless.app"
+        echo "✅ App signature verified"
         
     - name: Get app version
       run: |
@@ -127,26 +135,16 @@ jobs:
         echo "- Architecture: Universal (ARM64 + x86_64)" >> release_notes.md
     
     - name: Create Release
-      uses: actions/create-release@v1
-      id: create_release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.event.inputs.version }}
-        release_name: Typeless ${{ github.event.inputs.version }}
+        name: Typeless ${{ github.event.inputs.version }}
         body_path: release_notes.md
         draft: false
         prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
-    
-    - name: Upload ZIP to release
-      uses: actions/upload-release-asset@v1
+        files: build-artifacts/Typeless-${{ env.APP_VERSION }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build-artifacts/Typeless-${{ env.APP_VERSION }}.zip
-        asset_name: Typeless-${{ env.APP_VERSION }}.zip
-        asset_content_type: application/zip
     
     - name: Release Summary
       run: |
@@ -154,4 +152,3 @@ jobs:
         echo "📦 Version: ${{ env.APP_VERSION }}"
         echo "🏷️ Tag: ${{ github.event.inputs.version }}"
         echo "📋 Type: ${{ github.event.inputs.release_type }}"
-        echo "🔗 Release URL: ${{ steps.create_release.outputs.html_url }}"
