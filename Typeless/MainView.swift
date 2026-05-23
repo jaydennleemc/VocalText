@@ -579,7 +579,7 @@ struct PrimaryButtonStyle: ButtonStyle {
 }
 
 struct MainView: View {
-    @StateObject private var audioTranscriber = AudioTranscriber()
+    @StateObject private var audioTranscriber = AudioTranscriber.shared
     @StateObject private var appState = AppState()
     @State private var selectedModel = "Tiny" {
         didSet {

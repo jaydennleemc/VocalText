@@ -14,6 +14,9 @@ protocol AudioTranscriberDelegate: AnyObject {
 
 @MainActor
 final class AudioTranscriber: ObservableObject {
+    /// Shared singleton for cross-component access (e.g., overlay window)
+    static let shared = AudioTranscriber()
+
     // MARK: - Services
 
     let recorder = AudioRecorder()
@@ -245,11 +248,4 @@ final class AudioTranscriber: ObservableObject {
         recorder.stopRecording()
         fileWriter.cleanupTempFiles()
     }
-}
-
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let recordingStarted = Notification.Name("RecordingStarted")
-    static let recordingStopped = Notification.Name("RecordingStopped")
 }

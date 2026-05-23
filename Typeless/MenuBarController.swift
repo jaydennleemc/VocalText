@@ -9,6 +9,7 @@ import Cocoa
 import SwiftUI
 import Combine
 
+@MainActor
 class MenuBarController: NSObject, MainViewDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
@@ -16,6 +17,10 @@ class MenuBarController: NSObject, MainViewDelegate {
 
     private var cancellables = Set<AnyCancellable>()
     private var keyboardShortcutManager: KeyboardShortcutManager!
+    private lazy var overlayManager: TranscriptionOverlayManager = {
+        TranscriptionOverlayManager()
+    }()
+    private var audioTranscriber: AudioTranscriber?
 
     override init() {
         super.init()
@@ -141,8 +146,12 @@ class MenuBarController: NSObject, MainViewDelegate {
     func startQuickRecord() {
         // 通知 MainView 开始快速录音
         NotificationCenter.default.post(name: Notification.Name("StartQuickRecord"), object: nil)
+
+        // 显示浮动转录窗口（类似输入法候选词窗口）
+        let transcriber = AudioTranscriber.shared
+        overlayManager.showOverlay(transcriber: transcriber)
     }
-    
+
     func stopQuickRecord() {
         // 通知 MainView 停止快速录音
         NotificationCenter.default.post(name: Notification.Name("StopQuickRecord"), object: nil)
