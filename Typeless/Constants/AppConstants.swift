@@ -12,6 +12,7 @@ enum AppConstants {
         static let minDB: Double = -80.0
         static let maxDB: Double = -10.0
         static let bufferSize: UInt32 = 1024
+        static let maxRecordingDataSize: Int = 100 * 1024 * 1024 // 100MB cap for safety
     }
 
     enum Recording {
@@ -137,7 +138,6 @@ enum AppConstants {
     }
 
     enum Device {
-        static let monitoringInterval: TimeInterval = 5.0
         static let deviceLoadDelay: TimeInterval = 0.5
     }
 
@@ -163,7 +163,6 @@ enum AppConstants {
     }
 
     enum QuickRecord {
-        static let minimumDuration: TimeInterval = 0.5
         static let copiedIndicatorDuration: TimeInterval = 2.0
     }
 

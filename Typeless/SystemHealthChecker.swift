@@ -153,24 +153,19 @@ class SystemHealthChecker: ObservableObject {
     }
 
     /// 检查音频设备可用性
-    func checkAudioDevices() -> [AudioDevice] {
-        var devices: [AudioDevice] = []
+    func checkAudioDevices() -> [AudioDeviceModel] {
+        var devices: [AudioDeviceModel] = []
 
-        // 使用 AVCaptureDevice 获取输入设备（macOS）
         #if os(macOS)
         let deviceSystem = AVCaptureDevice.devices(for: .audio)
-        for device in deviceSystem {
-            if device.hasMediaType(.audio) {
-                devices.append(AudioDevice(name: device.localizedName, uniqueID: device.uniqueID))
-            }
+        for device in deviceSystem where device.hasMediaType(.audio) {
+            devices.append(AudioDeviceModel(
+                id: AudioDeviceID(bitPattern: 0),
+                name: device.localizedName,
+                uniqueID: device.uniqueID
+            ))
         }
         #endif
-
-        // 如果没有找到设备，尝试使用 CoreAudio
-        if devices.isEmpty {
-            // 这里可以添加更底层的 CoreAudio 设备枚举
-            // 作为备用方案
-        }
 
         return devices
     }
@@ -373,9 +368,4 @@ class SystemHealthChecker: ObservableObject {
     }
 }
 
-/// 音频设备结构体
-struct AudioDevice: Identifiable {
-    let id = UUID()
-    let name: String
-    let uniqueID: String
-}
+

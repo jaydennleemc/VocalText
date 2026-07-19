@@ -35,6 +35,7 @@ final class AudioTranscriber: ObservableObject {
     @Published var isRecording: Bool = false
     @Published var isTranscribing: Bool = false
     @Published var transcript: String = NSLocalizedString("recording.state.ready", comment: "Ready to record")
+    @Published var hasValidTranscript = false
     @Published var isDownloading: Bool = false
     @Published var downloadProgress: Double = 0.0
     @Published var downloadStatus: String = NSLocalizedString("model.status.preparing", comment: "Preparing to download model")
@@ -86,6 +87,8 @@ final class AudioTranscriber: ObservableObject {
             .assign(to: &$isTranscribing)
         transcriptionService.$transcript
             .assign(to: &$transcript)
+        transcriptionService.$hasValidTranscript
+            .assign(to: &$hasValidTranscript)
 
         // Forward device state
         deviceManager.$audioDevices
@@ -105,7 +108,8 @@ final class AudioTranscriber: ObservableObject {
         NotificationCenter.default.publisher(for: .modelErrorOccurred)
             .compactMap { $0.object as? TypelessError }
             .sink { [weak self] error in
-                self?.delegate?.audioTranscriber(self!, didEncounterError: error)
+                guard let self else { return }
+                self.delegate?.audioTranscriber(self, didEncounterError: error)
             }
             .store(in: &cancellables)
 
@@ -113,7 +117,8 @@ final class AudioTranscriber: ObservableObject {
         NotificationCenter.default.publisher(for: .transcriptionError)
             .compactMap { $0.object as? TypelessError }
             .sink { [weak self] error in
-                self?.delegate?.audioTranscriber(self!, didEncounterError: error)
+                guard let self else { return }
+                self.delegate?.audioTranscriber(self, didEncounterError: error)
             }
             .store(in: &cancellables)
     }
@@ -167,17 +172,16 @@ final class AudioTranscriber: ObservableObject {
     }
 
     func stopRecording() {
-        recorder.stopRecording()
+        let (data, format) = recorder.stopRecording()
         NotificationCenter.default.post(name: .recordingStopped, object: nil)
 
-        let data = recorder.recordedData
         guard !data.isEmpty else {
             transcript = NSLocalizedString("error.transcription.emptyResult", comment: "No audio data recorded")
             delegate?.audioTranscriber(self, didEncounterError: .transcriptionEmptyResult)
             return
         }
 
-        processAudio(data: data, format: recorder.format)
+        processAudio(data: data, format: format)
     }
 
     // MARK: - Audio Processing

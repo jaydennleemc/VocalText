@@ -374,9 +374,9 @@ struct SettingsView: View {
         audioTranscriber.setSelectedDevice(index: selectedDeviceIndex)
         audioTranscriber.setLanguage(selectedLanguage)
         if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel) {
-            NotificationCenter.default.post(name: Notification.Name("ModelDownloadRequested"), object: selectedModel)
+            NotificationCenter.default.post(name: .modelDownloadRequested, object: selectedModel)
         } else {
-            NotificationCenter.default.post(name: Notification.Name("ModelChanged"), object: nil)
+            NotificationCenter.default.post(name: .modelChanged, object: nil)
         }
         isPresented = false
     }
@@ -608,35 +608,6 @@ struct AccessibilityPermissionCard: View {
             RoundedRectangle(cornerRadius: AppConstants.UI.radiusMD)
                 .stroke(Color.warningOrange.opacity(0.3), lineWidth: 1)
         )
-    }
-}
-
-// MARK: - Button Styles
-
-struct SettingsPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, AppConstants.UI.spacingSM)
-            .padding(.vertical, 6)
-            .background(Color.accentGradient)
-            .foregroundColor(.white)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: configuration.isPressed)
-    }
-}
-
-struct SettingsSecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, AppConstants.UI.spacingSM)
-            .padding(.vertical, 6)
-            .background(Color.bgHover)
-            .foregroundColor(.textSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
-            .opacity(configuration.isPressed ? 0.7 : 1.0)
-            .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: configuration.isPressed)
     }
 }
 

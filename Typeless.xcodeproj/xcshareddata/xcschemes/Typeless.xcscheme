@@ -19,7 +19,21 @@
                BlueprintName = "Typeless"
                ReferencedContainer = "container:Typeless.xcodeproj">
             </BuildableReference>
-         </BuildActionEntry>
+          </BuildActionEntry>
+          <BuildActionEntry
+             buildForTesting = "YES"
+             buildForRunning = "NO"
+             buildForProfiling = "NO"
+             buildForArchiving = "NO"
+             buildForAnalyzing = "NO">
+             <BuildableReference
+                BuildableIdentifier = "primary"
+                BlueprintIdentifier = "4bdecd2488994443ae5ffc1f"
+                BuildableName = "TypelessTests.xctest"
+                BlueprintName = "TypelessTests"
+                ReferencedContainer = "container:Typeless.xcodeproj">
+             </BuildableReference>
+          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -28,6 +42,16 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4bdecd2488994443ae5ffc1f"
+               BuildableName = "TypelessTests.xctest"
+               BlueprintName = "TypelessTests"
+               ReferencedContainer = "container:Typeless.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

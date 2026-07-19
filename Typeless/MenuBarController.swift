@@ -112,49 +112,39 @@ class MenuBarController: NSObject, MainViewDelegate {
     // MARK: - MainViewDelegate Methods
 
     func toggleRecording() {
-        // 通知 MainView 切换录音状态
-        NotificationCenter.default.post(name: Notification.Name("ToggleRecording"), object: nil)
+        NotificationCenter.default.post(name: .toggleRecording, object: nil)
     }
 
     func copyTranscript() {
-        // 通知 MainView 复制转录文本
-        NotificationCenter.default.post(name: Notification.Name("CopyTranscript"), object: nil)
+        NotificationCenter.default.post(name: .copyTranscript, object: nil)
     }
 
     func openSettings() {
-        // 通知 MainView 打开设置
-        NotificationCenter.default.post(name: Notification.Name("OpenSettings"), object: nil)
+        NotificationCenter.default.post(name: .openSettings, object: nil)
     }
 
     func closePopover() {
-        // 关闭弹窗
         if popover.isShown {
             popover.performClose(nil)
         }
     }
 
     func showTutorial() {
-        // 通知 MainView 显示教程
-        NotificationCenter.default.post(name: Notification.Name("ShowTutorial"), object: nil)
+        NotificationCenter.default.post(name: .showTutorial, object: nil)
     }
 
     func forceRetryDownload() {
-        // 通知 MainView 强制重试下载
-        NotificationCenter.default.post(name: Notification.Name("ForceRetryDownload"), object: nil)
+        NotificationCenter.default.post(name: .forceRetryDownload, object: nil)
     }
-    
-    func startQuickRecord() {
-        // 通知 MainView 开始快速录音
-        NotificationCenter.default.post(name: Notification.Name("StartQuickRecord"), object: nil)
 
-        // 显示浮动转录窗口（类似输入法候选词窗口）
+    func startQuickRecord() {
+        NotificationCenter.default.post(name: .startQuickRecord, object: nil)
         let transcriber = AudioTranscriber.shared
         overlayManager.showOverlay(transcriber: transcriber)
     }
 
     func stopQuickRecord() {
-        // 通知 MainView 停止快速录音
-        NotificationCenter.default.post(name: Notification.Name("StopQuickRecord"), object: nil)
+        NotificationCenter.default.post(name: .stopQuickRecord, object: nil)
     }
 
     deinit {

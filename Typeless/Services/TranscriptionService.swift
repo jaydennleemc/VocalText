@@ -7,6 +7,7 @@ import WhisperKit
 final class TranscriptionService: ObservableObject {
     @Published var isTranscribing = false
     @Published var transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
+    @Published var hasValidTranscript = false
 
     private var selectedLanguage: String = AppConstants.Defaults.language
 
@@ -23,6 +24,7 @@ final class TranscriptionService: ObservableObject {
     func transcribe(audioFilePath: String, using whisperKit: WhisperKit?) async {
         guard let whisperKit = whisperKit else {
             transcript = NSLocalizedString("model.status.load.failed", comment: "Model failed to load")
+            hasValidTranscript = false
             NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.modelLoadFailed(reason: "WhisperKit not initialized"))
             return
         }
@@ -30,6 +32,7 @@ final class TranscriptionService: ObservableObject {
         // Validate file
         guard FileManager.default.fileExists(atPath: audioFilePath) else {
             transcript = NSLocalizedString("error.file.notFound", comment: "Audio file not found")
+            hasValidTranscript = false
             NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.fileNotFound(path: audioFilePath))
             return
         }
@@ -38,6 +41,7 @@ final class TranscriptionService: ObservableObject {
             let fileAttributes = try FileManager.default.attributesOfItem(atPath: audioFilePath)
             if let fileSize = fileAttributes[.size] as? NSNumber, fileSize.intValue == 0 {
                 transcript = NSLocalizedString("error.file.empty", comment: "Audio file is empty")
+                hasValidTranscript = false
                 NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.fileEmpty(path: audioFilePath))
                 return
             }
@@ -62,21 +66,12 @@ final class TranscriptionService: ObservableObject {
                 decodeOptions: decodingOptions
             )
 
-            var extractedText = NSLocalizedString("error.transcription.emptyResult", comment: "Empty transcription result")
-
-            if let results = result as? [TranscriptionResult] {
-                extractedText = results.first?.text ?? extractedText
-            } else if let textResults = result as? [String] {
-                extractedText = textResults.first?.isEmpty == false ? textResults.first! : extractedText
-            } else if let singleText = result as? String {
-                extractedText = singleText.isEmpty ? extractedText : singleText
-            } else if let text = (result as? NSObject)?.value(forKey: "text") as? String {
-                extractedText = text.isEmpty ? extractedText : text
-            }
-
+            let extractedText = Self.extractTranscriptText(from: result)
             transcript = extractedText
+            hasValidTranscript = !extractedText.isEmpty
         } catch {
             transcript = String(format: NSLocalizedString("error.transcription.failed", comment: "Transcription failed"), error.localizedDescription)
+            hasValidTranscript = false
             NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.transcriptionFailed(reason: error.localizedDescription))
         }
 
@@ -86,9 +81,31 @@ final class TranscriptionService: ObservableObject {
 
     func resetTranscript() {
         transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
+        hasValidTranscript = false
+    }
+
+    private static func extractTranscriptText(from result: Any) -> String {
+        // Primary expected type from WhisperKit
+        if let results = result as? [TranscriptionResult] {
+            return results.first?.text ?? ""
+        }
+
+        // Fallback for string array results
+        if let textResults = result as? [String] {
+            return textResults.first ?? ""
+        }
+
+        // Single string result
+        if let singleText = result as? String {
+            return singleText
+        }
+
+        #if DEBUG
+        print("⚠️ Unexpected WhisperKit result type: \(type(of: result))")
+        #endif
+        return ""
     }
 }
 
 // MARK: - Notification Names
-
-// Notification names are defined in MainView.swift
+// Notification.Name extensions are defined in Extensions/Notifications.swift

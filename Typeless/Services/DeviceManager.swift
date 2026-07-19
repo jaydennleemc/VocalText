@@ -11,7 +11,7 @@ final class DeviceManager: ObservableObject {
     @Published var hasAvailableDevices = false
 
     private var selectedDeviceID: AudioDeviceID?
-    private var monitoringTimer: Timer?
+    private var deviceListener: AudioObjectPropertyListenerBlock?
 
     // MARK: - Initialization
 
@@ -20,15 +20,26 @@ final class DeviceManager: ObservableObject {
     }
 
     deinit {
-        // Timer invalidation is safe from any thread
-        monitoringTimer?.invalidate()
-        monitoringTimer = nil
+        // Inline cleanup: deinit is not @MainActor-isolated so we cannot call stopMonitoring()
+        if let listener = deviceListener {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDevices,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                nil,
+                listener
+            )
+        }
     }
 
     // MARK: - Public Methods
 
     func refreshDevices() {
-        let devices = getAvailableAudioDevicesSync()
+        let devices = enumerateAudioDevices()
         let oldCount = audioDevices.count
         audioDevices = devices
         hasAvailableDevices = !devices.isEmpty
@@ -61,22 +72,58 @@ final class DeviceManager: ObservableObject {
 
     private func startMonitoring() {
         refreshDevices()
-        monitoringTimer = Timer.scheduledTimer(withTimeInterval: AppConstants.Device.monitoringInterval, repeats: true) { [weak self] _ in
+        registerDeviceChangeCallback()
+    }
+
+    private func stopMonitoring() {
+        if let listener = deviceListener {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDevices,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                nil,
+                listener
+            )
+            deviceListener = nil
+        }
+    }
+
+    private func registerDeviceChangeCallback() {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] inCount, inAddresses in
             Task { @MainActor in
                 self?.refreshDevices()
             }
         }
+
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            nil,
+            listener
+        )
+
+        if status == noErr {
+            deviceListener = listener
+        } else {
+            #if DEBUG
+            print("⚠️ Failed to register CoreAudio device callback, status: \(status)")
+            #endif
+        }
     }
 
-    private func stopMonitoring() {
-        monitoringTimer?.invalidate()
-        monitoringTimer = nil
-    }
-
-    private func getAvailableAudioDevicesSync() -> [AudioDeviceModel] {
+    private func enumerateAudioDevices() -> [AudioDeviceModel] {
         var devices: [AudioDeviceModel] = []
 
-        var deviceCount = UInt32(0)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -87,13 +134,12 @@ final class DeviceManager: ObservableObject {
         var status = AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize)
         guard status == noErr else { return devices }
 
-        deviceCount = propertySize / UInt32(MemoryLayout<AudioDeviceID>.size)
+        let deviceCount = propertySize / UInt32(MemoryLayout<AudioDeviceID>.size)
         var deviceIDs = [AudioDeviceID](repeating: 0, count: Int(deviceCount))
         status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize, &deviceIDs)
         guard status == noErr else { return devices }
 
         for deviceID in deviceIDs {
-            var streamCount = UInt32(0)
             var streamAddress = AudioObjectPropertyAddress(
                 mSelector: kAudioDevicePropertyStreams,
                 mScope: kAudioDevicePropertyScopeInput,
@@ -104,10 +150,10 @@ final class DeviceManager: ObservableObject {
             status = AudioObjectGetPropertyDataSize(deviceID, &streamAddress, 0, nil, &propertySize)
             guard status == noErr else { continue }
 
-            streamCount = propertySize / UInt32(MemoryLayout<AudioObjectID>.size)
+            let streamCount = propertySize / UInt32(MemoryLayout<AudioObjectID>.size)
             if streamCount > 0 {
                 let deviceName = getDeviceName(deviceID: deviceID)
-                if deviceName != NSLocalizedString("status.device.unknown", comment: "Unknown device") && !deviceName.isEmpty {
+                if !deviceName.isEmpty {
                     devices.append(AudioDeviceModel(id: deviceID, name: deviceName))
                 }
             }
@@ -124,11 +170,12 @@ final class DeviceManager: ObservableObject {
             mElement: kAudioObjectPropertyElementMain
         )
 
-        var status = AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &propertySize)
-        guard status == noErr else { return NSLocalizedString("status.device.unknown", comment: "Unknown device") }
+        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &propertySize) == noErr else {
+            return NSLocalizedString("status.device.unknown", comment: "Unknown device")
+        }
 
         var deviceNameCFString: CFString?
-        status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &propertySize, &deviceNameCFString)
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &propertySize, &deviceNameCFString)
         if status == noErr, let name = deviceNameCFString {
             return name as String
         }
@@ -137,5 +184,4 @@ final class DeviceManager: ObservableObject {
 }
 
 // MARK: - Notification Names
-
-// Notification names are defined in MainView.swift
+// Notification.Name extensions are defined in Extensions/Notifications.swift

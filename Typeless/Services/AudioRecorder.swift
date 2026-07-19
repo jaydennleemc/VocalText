@@ -13,18 +13,28 @@ final class AudioRecorder: ObservableObject {
     private var audioEngine: AVAudioEngine?
     private var audioFormat: AVAudioFormat?
     private var audioData = Data()
+    private var audioDataSizeWarning = false
     private var recordingTimer: Timer?
+    private let dataLock = NSLock()
 
     // MARK: - Public Methods
 
-    var recordedData: Data { audioData }
+    var recordedData: Data {
+        dataLock.lock()
+        defer { dataLock.unlock() }
+        return audioData
+    }
+
     var format: AVAudioFormat? { audioFormat }
 
     func startRecording() throws {
         guard !isRecording else { return }
 
         // Reset data
+        dataLock.lock()
         audioData = Data()
+        audioDataSizeWarning = false
+        dataLock.unlock()
         recordingTime = 0.0
 
         // Setup audio engine
@@ -52,10 +62,18 @@ final class AudioRecorder: ObservableObject {
                 self.volumeLevel = volume
             }
 
-            if let audioData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
-                Task { @MainActor in
-                    self.audioData.append(audioData)
+            if let bufferData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
+                self.dataLock.lock()
+                let maxBytes = AppConstants.Audio.maxRecordingDataSize
+                if self.audioData.count + bufferData.count <= maxBytes {
+                    self.audioData.append(bufferData)
+                } else if !self.audioDataSizeWarning {
+                    self.audioDataSizeWarning = true
+                    #if DEBUG
+                    print("⚠️ Audio data buffer approaching limit (\(maxBytes / 1024 / 1024)MB)")
+                    #endif
                 }
+                self.dataLock.unlock()
             }
         }
 
@@ -80,8 +98,8 @@ final class AudioRecorder: ObservableObject {
         #endif
     }
 
-    func stopRecording() {
-        guard isRecording else { return }
+    func stopRecording() -> (data: Data, format: AVAudioFormat?) {
+        guard isRecording else { return (Data(), nil) }
 
         isRecording = false
         recordingTime = 0.0
@@ -90,7 +108,7 @@ final class AudioRecorder: ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // Stop engine
+        // Stop engine first, then capture final data under lock
         if let engine = audioEngine {
             if engine.isRunning {
                 engine.stop()
@@ -99,14 +117,18 @@ final class AudioRecorder: ObservableObject {
         }
         audioEngine = nil
 
-        #if DEBUG
-        print("⏹️ Recording stopped, data size: \(audioData.count) bytes")
-        #endif
-    }
-
-    func resetData() {
+        // Capture data synchronously after engine is stopped
+        dataLock.lock()
+        let capturedData = audioData
+        let capturedFormat = audioFormat
         audioData = Data()
-        audioFormat = nil
+        dataLock.unlock()
+
+        #if DEBUG
+        print("⏹️ Recording stopped, data size: \(capturedData.count) bytes")
+        #endif
+
+        return (capturedData, capturedFormat)
     }
 
     // MARK: - Volume Calculation

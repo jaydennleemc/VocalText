@@ -33,6 +33,18 @@
 		E37BE4C25D36D29E40B88B3E /* AudioFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AD039223EF1ED1B83E05E94 /* AudioFileWriter.swift */; };
 		24E8928167AA4470B9F8A2E28781071E /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F42D4E2E91443F2A48523F871096A29 /* Color+Theme.swift */; };
 		DF8B3391DA554FDBA2283F0D3ACC6A27 /* View+Styles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B3B6E5CA754E39B0BB0EACF37DE5F8 /* View+Styles.swift */; };
+		9d581fdad4a84fd5a9e466c6 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ef7306a6c6f45f9b73218ba /* Notifications.swift */; };
+		fec87f7bfbee40febe8065a8 /* ErrorBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ac3f837c77445a7a167244d /* ErrorBannerView.swift */; };
+		7f922538c9684ca2aaea9384 /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25b0a21868134c2687bafbea /* WaveformView.swift */; };
+		a896ac41a10842089702986c /* RecordingButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22772c1a71524f53bb9a2c5d /* RecordingButtonView.swift */; };
+		de638afbead042d1aa943f6d /* TranscriptionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = e220043ec93348b78ba13e29 /* TranscriptionCardView.swift */; };
+		c8d06730f9fb4d399ee49984 /* StateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = dc25a03f238e4365b72e2827 /* StateViews.swift */; };
+		450a46de45b3490696ec18da /* MainContentContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = b17b730806d442e2ab8ae529 /* MainContentContainer.swift */; };
+		032dc933acba4781a5f87f65 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = c2c817c387654cf088121652 /* ButtonStyles.swift */; };
+		dbee66b3296c478fbc7d4913 /* TypelessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = a2d4311a32e34dc0b4c8f1e0 /* TypelessTests.swift */; };
+		baf93e852b7e49d6bc3e3038 /* AppConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ff43c2f7f1f4916847a45c6 /* AppConstantsTests.swift */; };
+		37b30db0ebf045b5ad50015b /* ModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = d332233830324864aacb0062 /* ModelTests.swift */; };
+		3c4fe47c09bc4566bb3f46a3 /* NotificationNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9401b3242c31483696e833e2 /* NotificationNameTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -68,6 +80,20 @@
 		FDE27899BE634CA6975E6040 /* RecordingEntry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecordingEntry.swift; path = Models/RecordingEntry.swift; sourceTree = "<group>"; };
 		0F42D4E2E91443F2A48523F871096A29 /* Color+Theme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Color+Theme.swift"; path = "Extensions/Color+Theme.swift"; sourceTree = "<group>"; };
 		45B3B6E5CA754E39B0BB0EACF37DE5F8 /* View+Styles.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "View+Styles.swift"; path = "Extensions/View+Styles.swift"; sourceTree = "<group>"; };
+		8ef7306a6c6f45f9b73218ba /* Notifications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Notifications.swift; path = Extensions/Notifications.swift; sourceTree = "<group>"; };
+		7ac3f837c77445a7a167244d /* ErrorBannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Views/ErrorBannerView.swift; sourceTree = "<group>"; };
+		25b0a21868134c2687bafbea /* WaveformView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Views/WaveformView.swift; sourceTree = "<group>"; };
+		22772c1a71524f53bb9a2c5d /* RecordingButtonView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Views/RecordingButtonView.swift; sourceTree = "<group>"; };
+		e220043ec93348b78ba13e29 /* TranscriptionCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Views/TranscriptionCardView.swift; sourceTree = "<group>"; };
+		dc25a03f238e4365b72e2827 /* StateViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Views/StateViews.swift; sourceTree = "<group>"; };
+		b17b730806d442e2ab8ae529 /* MainContentContainer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Views/MainContentContainer.swift; sourceTree = "<group>"; };
+		c2c817c387654cf088121652 /* ButtonStyles.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Views/ButtonStyles.swift; sourceTree = "<group>"; };
+		a2d4311a32e34dc0b4c8f1e0 /* TypelessTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TypelessTests.swift; sourceTree = "<group>"; };
+		4ff43c2f7f1f4916847a45c6 /* AppConstantsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppConstantsTests.swift; sourceTree = "<group>"; };
+		d332233830324864aacb0062 /* ModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ModelTests.swift; sourceTree = "<group>"; };
+		9401b3242c31483696e833e2 /* NotificationNameTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationNameTests.swift; sourceTree = "<group>"; };
+		147307bfbc3d44b397d7beff /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0a440e3dfb9842edb76de285 /* TypelessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TypelessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +120,7 @@
 			isa = PBXGroup;
 			children = (
 				3CB4DDAE2E78F7D7008C5555 /* Typeless */,
+				bca00445a0c54450a88b4268 /* TypelessTests */,
 				3CB4DDAD2E78F7D7008C5555 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -102,6 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				3CB4DDAC2E78F7D7008C5555 /* Typeless.app */,
+				0a440e3dfb9842edb76de285 /* TypelessTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -134,6 +162,7 @@
 				2CEABA4F92B6260FD98AE07C /* Services */,
 				4096AC198811F0A6F9E599C3 /* ViewModels */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* Extensions */,
+				6bc2941af4a74b9f950c70d4 /* Views */,
 			);
 			path = Typeless;
 			sourceTree = "<group>";
@@ -151,8 +180,35 @@
 			children = (
 				0F42D4E2E91443F2A48523F871096A29 /* Color+Theme.swift */,
 				45B3B6E5CA754E39B0BB0EACF37DE5F8 /* View+Styles.swift */,
+				8ef7306a6c6f45f9b73218ba /* Notifications.swift */,
 			);
 			name = Extensions;
+			sourceTree = "<group>";
+		};
+		6bc2941af4a74b9f950c70d4 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				7ac3f837c77445a7a167244d /* ErrorBannerView.swift */,
+				25b0a21868134c2687bafbea /* WaveformView.swift */,
+				22772c1a71524f53bb9a2c5d /* RecordingButtonView.swift */,
+				e220043ec93348b78ba13e29 /* TranscriptionCardView.swift */,
+				dc25a03f238e4365b72e2827 /* StateViews.swift */,
+				b17b730806d442e2ab8ae529 /* MainContentContainer.swift */,
+				c2c817c387654cf088121652 /* ButtonStyles.swift */,
+			);
+			name = Views;
+			sourceTree = "<group>";
+		};
+		bca00445a0c54450a88b4268 /* TypelessTests */ = {
+			isa = PBXGroup;
+			children = (
+				a2d4311a32e34dc0b4c8f1e0 /* TypelessTests.swift */,
+				4ff43c2f7f1f4916847a45c6 /* AppConstantsTests.swift */,
+				d332233830324864aacb0062 /* ModelTests.swift */,
+				9401b3242c31483696e833e2 /* NotificationNameTests.swift */,
+				147307bfbc3d44b397d7beff /* Info.plist */,
+			);
+			path = TypelessTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -178,6 +234,24 @@
 			productReference = 3CB4DDAC2E78F7D7008C5555 /* Typeless.app */;
 			productType = "com.apple.product-type.application";
 		};
+		4bdecd2488994443ae5ffc1f /* TypelessTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = bebad57609e8482692423960 /* Build configuration list for PBXNativeTarget "TypelessTests" */;
+			buildPhases = (
+				d51e31c7fd294b608a6741b7 /* Sources */,
+				27ace9ae2c244f14b41e7196 /* Frameworks */,
+				fe00f1ea1d4d45c682ff6ca2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				a473c332686d4578ad195bfa /* PBXTargetDependency */,
+			);
+			name = TypelessTests;
+			productName = TypelessTests;
+			productReference = 0a440e3dfb9842edb76de285 /* TypelessTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -202,6 +276,7 @@
 			projectRoot = "";
 			targets = (
 				3CB4DDAB2E78F7D7008C5555 /* Typeless */,
+				4bdecd2488994443ae5ffc1f /* TypelessTests */,
 			);
 		};
 /* End PBXProject section */
@@ -214,6 +289,13 @@
 				3CB4DDC02E78F7D9008C5555 /* Assets.xcassets in Resources */,
 				3CB4DDC32E78F7D9008C5555 /* InfoPlist.strings in Resources */,
 				3CB4DDC62E78F7D9008C5555 /* Localizable.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		fe00f1ea1d4d45c682ff6ca2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -246,10 +328,43 @@
 				64356B157414D8D24CA72AD7 /* AudioTranscriber.swift in Sources */,
 				24E8928167AA4470B9F8A2E28781071E /* Color+Theme.swift in Sources */,
 				DF8B3391DA554FDBA2283F0D3ACC6A27 /* View+Styles.swift in Sources */,
+				9d581fdad4a84fd5a9e466c6 /* Notifications.swift in Sources */,
+				fec87f7bfbee40febe8065a8 /* ErrorBannerView.swift in Sources */,
+				7f922538c9684ca2aaea9384 /* WaveformView.swift in Sources */,
+				a896ac41a10842089702986c /* RecordingButtonView.swift in Sources */,
+				de638afbead042d1aa943f6d /* TranscriptionCardView.swift in Sources */,
+				c8d06730f9fb4d399ee49984 /* StateViews.swift in Sources */,
+				450a46de45b3490696ec18da /* MainContentContainer.swift in Sources */,
+				032dc933acba4781a5f87f65 /* ButtonStyles.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		d51e31c7fd294b608a6741b7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				dbee66b3296c478fbc7d4913 /* TypelessTests.swift in Sources */,
+				baf93e852b7e49d6bc3e3038 /* AppConstantsTests.swift in Sources */,
+				37b30db0ebf045b5ad50015b /* ModelTests.swift in Sources */,
+				3c4fe47c09bc4566bb3f46a3 /* NotificationNameTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		27ace9ae2c244f14b41e7196 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		a473c332686d4578ad195bfa /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3CB4DDAB2E78F7D7008C5555 /* Typeless */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		3CB4DDC12E78F7D9008C5555 /* InfoPlist.strings */ = {
@@ -449,6 +564,46 @@
 			};
 			name = Release;
 		};
+		bf301799e7f5430c9c1a5f06 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TypelessTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaydenlee.TypelessTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Typeless.app/Contents/MacOS/Typeless";
+			};
+			name = Debug;
+		};
+		a642efa6d6a949e1b3d6f232 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TypelessTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jaydenlee.TypelessTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Typeless.app/Contents/MacOS/Typeless";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -466,6 +621,15 @@
 			buildConfigurations = (
 				3CB4DDD02E78F7D9008C5555 /* Debug */,
 				3CB4DDD12E78F7D9008C5555 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		bebad57609e8482692423960 /* Build configuration list for PBXNativeTarget "TypelessTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				bf301799e7f5430c9c1a5f06 /* Debug */,
+				a642efa6d6a949e1b3d6f232 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

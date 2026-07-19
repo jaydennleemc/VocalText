@@ -118,7 +118,7 @@ final class ModelManager: ObservableObject {
         isPreloading = true
 
         do {
-            var config = WhisperKitConfig(model: currentModel)
+            let config = WhisperKitConfig(model: currentModel)
             let loaded = try await WhisperKit(config)
 
             whisperKit = loaded
@@ -151,4 +151,4 @@ final class ModelManager: ObservableObject {
     }
 }
 
-// Notification names are defined in MainView.swift
+// Notification.Name extensions are defined in Extensions/Notifications.swift

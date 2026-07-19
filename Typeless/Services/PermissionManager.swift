@@ -13,52 +13,26 @@ final class PermissionManager: ObservableObject {
     // MARK: - Microphone Permission
 
     func checkMicrophonePermission() {
-        if hasRequestedPermission {
-            AVAudioApplication.requestRecordPermission { [weak self] granted in
-                Task { @MainActor in
-                    self?.hasMicrophonePermission = granted
-                    self?.isCheckingPermission = false
-                }
-            }
-            return
-        }
-
-        isCheckingPermission = true
-
-        AVAudioApplication.requestRecordPermission { [weak self] granted in
-            Task { @MainActor in
-                self?.hasMicrophonePermission = granted
-                self?.isCheckingPermission = false
-                self?.hasRequestedPermission = true
-            }
-        }
+        requestPermission(showAlertOnDeny: false)
     }
 
     func requestMicrophonePermission() {
-        if hasRequestedPermission {
-            AVAudioApplication.requestRecordPermission { [weak self] granted in
-                Task { @MainActor in
-                    self?.hasMicrophonePermission = granted
-                    self?.isCheckingPermission = false
+        requestPermission(showAlertOnDeny: true)
+    }
 
-                    if !granted {
-                        self?.showMicrophoneSettingsAlert()
-                    }
-                }
-            }
-            return
+    private func requestPermission(showAlertOnDeny: Bool) {
+        if !hasRequestedPermission {
+            isCheckingPermission = true
+            hasRequestedPermission = true
         }
-
-        isCheckingPermission = true
-        hasRequestedPermission = true
 
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             Task { @MainActor in
-                self?.hasMicrophonePermission = granted
-                self?.isCheckingPermission = false
-
-                if !granted {
-                    self?.showMicrophoneSettingsAlert()
+                guard let self else { return }
+                self.hasMicrophonePermission = granted
+                self.isCheckingPermission = false
+                if !granted && showAlertOnDeny {
+                    self.showMicrophoneSettingsAlert()
                 }
             }
         }
