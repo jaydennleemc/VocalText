@@ -10,8 +10,8 @@ import SwiftUI
 // MARK: - Waveform Views
 
 struct VoiceMemoWaveformView: View {
-    @Binding var volumeLevel: Double
-    @State private var bars: [CGFloat] = Array(repeating: 0.1, count: AppConstants.Recording.waveformBarCount)
+    let volumeLevel: Double
+    @State private var bars: [CGFloat] = Array(repeating: 0.1, count: 50)
     @State private var lastVolumeUpdate: Date = Date()
 
     var body: some View {
@@ -20,17 +20,17 @@ struct VoiceMemoWaveformView: View {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(
                         LinearGradient(
-                            colors: [.recordingRed, .recordingRed.opacity(0.6)],
+                            colors: [.red, .red.opacity(0.6)],
                             startPoint: .bottom,
                             endPoint: .top
                         )
                     )
-                    .frame(width: AppConstants.UI.waveformBarWidth, height: max(2, bars[index] * AppConstants.UI.waveformHeight))
-                    .animation(.easeOut(duration: AppConstants.Animation.waveformBarDuration), value: bars[index])
+                    .frame(width: 4, height: max(2, bars[index] * 70))
+                    .animation(.easeOut(duration: 0.15), value: bars[index])
             }
         }
-        .frame(height: AppConstants.UI.waveformHeight)
-        .onReceive(Timer.publish(every: AppConstants.Recording.waveformTimerInterval, on: .main, in: .common).autoconnect()) { _ in
+        .frame(height: 70)
+        .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
             updateBars()
         }
         .onChange(of: volumeLevel) { _ in

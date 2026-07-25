@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import Accelerate
 
 // MARK: - Audio Recorder
 
@@ -16,6 +17,13 @@ final class AudioRecorder: ObservableObject {
     private var audioDataSizeWarning = false
     private var recordingTimer: Timer?
     private let dataLock = NSLock()
+    
+    // Constants (formerly in AppConstants)
+    private let maxRecordingDataSize = 100 * 1024 * 1024 // 100MB
+    private let bufferSize: UInt32 = 1024
+    private let timerInterval: TimeInterval = 0.1
+    private let minDB = -80.0
+    private let maxDB = -10.0
 
     // MARK: - Public Methods
 
@@ -51,7 +59,7 @@ final class AudioRecorder: ObservableObject {
         #endif
 
         // Install tap to capture audio
-        inputNode.installTap(onBus: bus, bufferSize: AppConstants.Audio.bufferSize, format: inputFormat) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: bus, bufferSize: bufferSize, format: inputFormat) { [weak self] buffer, _ in
             guard let self = self else { return }
 
             let channelCount = Int(buffer.format.channelCount)
@@ -64,13 +72,12 @@ final class AudioRecorder: ObservableObject {
 
             if let bufferData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
                 self.dataLock.lock()
-                let maxBytes = AppConstants.Audio.maxRecordingDataSize
-                if self.audioData.count + bufferData.count <= maxBytes {
+                if self.audioData.count + bufferData.count <= self.maxRecordingDataSize {
                     self.audioData.append(bufferData)
                 } else if !self.audioDataSizeWarning {
                     self.audioDataSizeWarning = true
                     #if DEBUG
-                    print("⚠️ Audio data buffer approaching limit (\(maxBytes / 1024 / 1024)MB)")
+                    print("⚠️ Audio data buffer approaching limit (\(self.maxRecordingDataSize / 1024 / 1024)MB)")
                     #endif
                 }
                 self.dataLock.unlock()
@@ -87,9 +94,9 @@ final class AudioRecorder: ObservableObject {
         isRecording = true
 
         // Start recording timer
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: AppConstants.Recording.timerInterval, repeats: true) { [weak self] _ in
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: timerInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.recordingTime += AppConstants.Recording.timerInterval
+                self?.recordingTime += self?.timerInterval ?? 0
             }
         }
 
@@ -131,7 +138,7 @@ final class AudioRecorder: ObservableObject {
         return (capturedData, capturedFormat)
     }
 
-    // MARK: - Volume Calculation
+    // MARK: - Volume Calculation (using vDSP)
 
     private func calculateVolume(from buffer: AVAudioPCMBuffer) -> Double {
         guard let channelData = buffer.floatChannelData else { return 0.0 }
@@ -139,19 +146,12 @@ final class AudioRecorder: ObservableObject {
         guard frameLength > 0 else { return 0.0 }
 
         let data = channelData[0]
-        var sum: Double = 0.0
-
-        for i in 0..<frameLength {
-            let sample = data[i]
-            sum += Double(sample * sample)
-        }
-
-        let mean = sum / Double(frameLength)
-        let rms = sqrt(mean)
-        let db = 20 * log10(rms)
-
-        let minDB = AppConstants.Audio.minDB
-        let maxDB = AppConstants.Audio.maxDB
+        var rms: Float = 0.0
+        
+        // Use vDSP for efficient RMS calculation
+        vDSP_rmsqv(data, 1, &rms, vDSP_Length(frameLength))
+        
+        let db = 20 * log10(Double(rms))
         var level = (db - minDB) / (maxDB - minDB)
         level = max(0.0, min(1.0, level))
 

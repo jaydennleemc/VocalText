@@ -28,31 +28,31 @@ struct TutorialView: View {
             title: NSLocalizedString("tutorial.step1.title", comment: ""),
             description: NSLocalizedString("tutorial.step1.description", comment: ""),
             icon: "waveform",
-            iconColor: .accentPrimary
+            iconColor: .accentColor
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step2.title", comment: ""),
             description: NSLocalizedString("tutorial.step2.description", comment: ""),
             icon: "mic.circle.fill",
-            iconColor: .recordingRed
+            iconColor: .red
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step3.title", comment: ""),
             description: NSLocalizedString("tutorial.step3.description", comment: ""),
             icon: "text.bubble.fill",
-            iconColor: .successGreen
+            iconColor: .green
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step4.title", comment: ""),
             description: NSLocalizedString("tutorial.step4.description", comment: ""),
             icon: "gearshape.fill",
-            iconColor: .accentPurple
+            iconColor: .purple
         ),
         TutorialStep(
             title: NSLocalizedString("tutorial.step5.title", comment: ""),
             description: NSLocalizedString("tutorial.step5.description", comment: ""),
             icon: "checkmark.circle.fill",
-            iconColor: .successGreen
+            iconColor: .green
         )
     ]
 
@@ -63,32 +63,34 @@ struct TutorialView: View {
                 Spacer()
                 Button(action: skipTutorial) {
                     Text("tutorial.skip.button")
-                        .font(.system(size: AppConstants.UI.fontBody))
-                        .foregroundColor(.textSecondary)
-                        .padding(.horizontal, AppConstants.UI.spacingXS)
-                        .padding(.vertical, AppConstants.UI.spacingXXS)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal, AppConstants.UI.spacingSM)
-            .padding(.top, AppConstants.UI.spacingXS)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
 
             // Progress bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.bgHover)
+                        .fill(Color(nsColor: .controlBackgroundColor))
                         .frame(height: 4)
 
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.accentGradient)
+                        .fill(
+                            LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)
+                        )
                         .frame(width: geometry.size.width * CGFloat(currentStep + 1) / CGFloat(steps.count), height: 4)
-                        .animation(.spring(response: AppConstants.Animation.springResponse), value: currentStep)
+                        .animation(.spring(response: 0.3), value: currentStep)
                 }
             }
             .frame(height: 4)
-            .padding(.horizontal, AppConstants.UI.spacingMD)
-            .padding(.top, AppConstants.UI.spacingXS)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
 
             // Main content
             ZStack {
@@ -96,32 +98,32 @@ struct TutorialView: View {
                     TutorialStepView(step: steps[index])
                         .opacity(currentStep == index ? 1 : 0)
                         .scaleEffect(currentStep == index ? 1 : 0.9)
-                        .animation(.spring(response: AppConstants.Animation.springResponse, dampingFraction: 0.85), value: currentStep)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: currentStep)
                 }
             }
             .frame(maxHeight: .infinity)
 
             // Bottom controls
-            VStack(spacing: AppConstants.UI.spacingMD) {
+            VStack(spacing: 16) {
                 // Step dots
-                HStack(spacing: AppConstants.UI.spacingXS) {
+                HStack(spacing: 8) {
                     ForEach(0..<steps.count, id: \.self) { index in
                         Capsule()
-                            .fill(index == currentStep ? AnyShapeStyle(Color.accentGradient) : AnyShapeStyle(Color.bgHover))
+                            .fill(index == currentStep ? AnyShapeStyle(LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Color(nsColor: .controlBackgroundColor)))
                             .frame(width: index == currentStep ? 20 : 8, height: 8)
-                            .animation(.spring(response: AppConstants.Animation.springResponse), value: currentStep)
+                            .animation(.spring(response: 0.3), value: currentStep)
                     }
                 }
 
                 // Navigation buttons
-                HStack(spacing: AppConstants.UI.spacingSM) {
+                HStack(spacing: 12) {
                     if currentStep > 0 {
                         Button(action: previousStep) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: AppConstants.UI.iconSmall, weight: .semibold))
-                                .foregroundColor(.textPrimary)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
                                 .frame(width: 40, height: 40)
-                                .background(Color.bgHover)
+                                .background(Color(nsColor: .controlBackgroundColor))
                                 .clipShape(Circle())
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -130,32 +132,34 @@ struct TutorialView: View {
                     Button(action: nextStep) {
                         HStack(spacing: 6) {
                             Text(currentStep == steps.count - 1 ? "tutorial.start.using.button" : "tutorial.next.button")
-                                .font(.system(size: AppConstants.UI.fontBody, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                             if currentStep < steps.count - 1 {
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: AppConstants.UI.fontCaption, weight: .semibold))
+                                    .font(.system(size: 11, weight: .semibold))
                             }
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, AppConstants.UI.spacingLG)
-                        .padding(.vertical, AppConstants.UI.spacingSM)
-                        .background(Color.accentGradient)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(
+                            LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)
+                        )
                         .clipShape(Capsule())
-                        .shadow(color: .accentGlow, radius: 8, x: 0, y: 4)
+                        .shadow(color: .accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
             }
-            .padding(.horizontal, AppConstants.UI.spacingLG)
-            .padding(.bottom, AppConstants.UI.spacingLG)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
-        .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.tutorialHeight)
-        .background(Color.bgSecondary)
+        .frame(width: 400, height: 380)
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     private func nextStep() {
         if currentStep < steps.count - 1 {
-            withAnimation(.spring(response: AppConstants.Animation.springResponse, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 currentStep += 1
             }
         } else {
@@ -165,7 +169,7 @@ struct TutorialView: View {
 
     private func previousStep() {
         if currentStep > 0 {
-            withAnimation(.spring(response: AppConstants.Animation.springResponse, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 currentStep -= 1
             }
         }
@@ -174,7 +178,7 @@ struct TutorialView: View {
     private func skipTutorial() {
         UserDefaults.standard.set(true, forKey: "HasCompletedTutorial")
         onTutorialCompleted?()
-        withAnimation(.easeOut(duration: AppConstants.Animation.fadeOutDuration)) {
+        withAnimation(.easeOut(duration: 0.2)) {
             isPresented = false
         }
     }
@@ -182,7 +186,7 @@ struct TutorialView: View {
     private func completeTutorial() {
         UserDefaults.standard.set(true, forKey: "HasCompletedTutorial")
         onTutorialCompleted?()
-        withAnimation(.easeOut(duration: AppConstants.Animation.fadeOutDuration)) {
+        withAnimation(.easeOut(duration: 0.2)) {
             isPresented = false
         }
     }
@@ -197,13 +201,19 @@ struct TutorialStepView: View {
     @State private var textOffset: CGFloat = 20
 
     var body: some View {
-        VStack(spacing: AppConstants.UI.spacingLG) {
+        VStack(spacing: 20) {
             Spacer()
 
             // Animated icon with gradient circle
             ZStack {
                 Circle()
-                    .fill(Color.tutorialGradient)
+                    .fill(
+                        LinearGradient(
+                            colors: [.accentColor, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 100, height: 100)
 
                 Image(systemName: step.icon)
@@ -223,15 +233,15 @@ struct TutorialStepView: View {
                 iconOpacity = 0
             }
 
-            VStack(spacing: AppConstants.UI.spacingXS) {
+            VStack(spacing: 8) {
                 Text(step.title)
-                    .font(.system(size: AppConstants.UI.fontTitle, weight: .bold))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
 
                 Text(step.description)
-                    .font(.system(size: AppConstants.UI.fontBodyLarge))
-                    .foregroundColor(.textSecondary)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
                     .frame(maxWidth: 280)
@@ -246,7 +256,7 @@ struct TutorialStepView: View {
 
             Spacer()
         }
-        .padding(.horizontal, AppConstants.UI.spacingLG)
+        .padding(.horizontal, 24)
     }
 }
 

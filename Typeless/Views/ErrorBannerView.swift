@@ -15,17 +15,17 @@ struct ErrorBanner: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: AppConstants.UI.spacingSM) {
+        HStack(spacing: 12) {
             Image(systemName: type.icon)
-                .font(.system(size: AppConstants.UI.iconMedium))
+                .font(.system(size: 18))
                 .foregroundColor(type.color)
                 .frame(width: 24, height: 24)
 
             Text(message)
-                .font(.system(size: AppConstants.UI.fontBodyLarge))
+                .font(.system(size: 14))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .foregroundColor(.textPrimary)
+                .foregroundColor(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: onDismiss) {
@@ -33,22 +33,22 @@ struct ErrorBanner: View {
                     .font(.caption)
                     .fontWeight(.bold)
                     .frame(width: 20, height: 20)
-                    .foregroundColor(.textTertiary)
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(4)
-            .background(Color.bgHover)
+            .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(Circle())
         }
-        .padding(.vertical, AppConstants.UI.spacingSM)
-        .padding(.horizontal, AppConstants.UI.spacingMD)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
         .background(type.backgroundColor)
-        .cornerRadius(AppConstants.UI.radiusSM)
+        .cornerRadius(6)
         .overlay(
-            RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM)
+            RoundedRectangle(cornerRadius: 6)
                 .stroke(type.borderColor, lineWidth: 1)
         )
-        .padding(.horizontal, AppConstants.UI.spacingSM)
+        .padding(.horizontal, 8)
         .transition(
             .asymmetric(
                 insertion: .move(edge: .top).combined(with: .opacity),

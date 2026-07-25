@@ -23,7 +23,7 @@ final class TranscriptionOverlayManager {
     private let windowWidth: CGFloat = 360
     private let windowHeight: CGFloat = 52
     private let windowPadding: CGFloat = 16
-    private let cornerRadius: CGFloat = AppConstants.UI.radiusMD
+    private let cornerRadius: CGFloat = 10
     private let marginFromCursor: CGFloat = 24
 
     // MARK: - Show / Hide
@@ -127,32 +127,32 @@ private struct OverlayView: View {
     let transcript: String
 
     var body: some View {
-        HStack(spacing: AppConstants.UI.spacingXS) {
+        HStack(spacing: 8) {
             Image(systemName: "waveform")
-                .font(.system(size: AppConstants.UI.iconSmall, weight: .medium))
-                .foregroundColor(Color.accentPrimary)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.accentColor)
                 .symbolEffect(.pulse, isActive: true)
 
             Text(transcript)
-                .font(.system(size: AppConstants.UI.fontBodyLarge))
-                .foregroundColor(.textPrimary)
+                .font(.system(size: 14))
+                .foregroundColor(.primary)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Image(systemName: "command")
-                .font(.system(size: AppConstants.UI.fontCaption, weight: .medium))
-                .foregroundColor(.textTertiary)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
         }
-        .padding(.horizontal, AppConstants.UI.spacingSM)
-        .padding(.vertical, AppConstants.UI.spacingXS)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: AppConstants.UI.radiusMD)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(.regularMaterial)
                 .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: AppConstants.UI.radiusMD)
-                .stroke(Color.borderActive, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.accentColor, lineWidth: 1)
         )
         .padding(4)
     }

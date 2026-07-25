@@ -16,32 +16,37 @@ struct StatusCard: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: AppConstants.UI.spacingSM) {
+        HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: AppConstants.UI.iconMedium))
+                .font(.system(size: 18))
                 .foregroundColor(color)
                 .frame(width: 36, height: 36)
                 .background(color.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: AppConstants.UI.fontBody, weight: .semibold))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
 
                 if let subtitle = subtitle {
                     Text(subtitle)
-                        .font(.system(size: AppConstants.UI.fontCaption))
-                        .foregroundColor(.textSecondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
             }
 
             Spacer()
         }
-        .padding(.horizontal, AppConstants.UI.spacingSM)
-        .padding(.vertical, AppConstants.UI.spacingXS)
-        .cardStyle()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
     }
 }
 
@@ -54,15 +59,15 @@ struct KeyboardShortcutHint: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(shortcut)
-                .font(.system(size: AppConstants.UI.fontCaption, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.bgHover)
+                .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
             Text(descriptionKey)
-                .font(.system(size: AppConstants.UI.fontCaption))
-                .foregroundColor(.textSecondary)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -74,21 +79,21 @@ struct LoadingStateView: View {
     let subtitleKey: LocalizedStringKey?
 
     var body: some View {
-        VStack(spacing: AppConstants.UI.spacingMD) {
+        VStack(spacing: 16) {
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle())
                 .scaleEffect(1.2)
-                .tint(.accentPrimary)
+                .tint(.accentColor)
 
-            VStack(spacing: AppConstants.UI.spacingXXS) {
+            VStack(spacing: 4) {
                 Text(titleKey)
-                    .font(.system(size: AppConstants.UI.fontBodyLarge, weight: .medium))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
 
                 if let subtitleKey = subtitleKey {
                     Text(subtitleKey)
-                        .font(.system(size: AppConstants.UI.fontBody))
-                        .foregroundColor(.textSecondary)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
                 }
             }
         }
@@ -103,28 +108,25 @@ struct DownloadProgressView: View {
     let progress: Double
 
     var body: some View {
-        VStack(spacing: AppConstants.UI.spacingLG) {
-            IconContainer(
-                icon: "arrow.down.circle.fill",
-                color: .accentPrimary,
-                size: AppConstants.UI.stateIconSize,
-                radius: AppConstants.UI.stateIconRadius
-            )
+        VStack(spacing: 20) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 56, weight: .medium))
+                .foregroundColor(.accentColor)
 
-            VStack(spacing: AppConstants.UI.spacingXS) {
+            VStack(spacing: 8) {
                 Text(status)
-                    .font(.system(size: AppConstants.UI.fontBodyLarge, weight: .medium))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
 
                 ProgressView(value: progress)
                     .progressViewStyle(LinearProgressViewStyle())
-                    .tint(.accentPrimary)
+                    .tint(.accentColor)
                     .frame(width: 200)
 
                 Text("\(Int(progress * 100))%")
-                    .font(.system(size: AppConstants.UI.fontBody, weight: .medium))
-                    .foregroundColor(.textSecondary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -137,27 +139,27 @@ struct ProcessingStateView: View {
     @State private var rotation: Double = 0
 
     var body: some View {
-        VStack(spacing: AppConstants.UI.spacingMD) {
+        VStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .stroke(Color.bgHover, lineWidth: 3)
+                    .stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 3)
                     .frame(width: 48, height: 48)
 
                 Circle()
                     .trim(from: 0, to: 0.3)
-                    .stroke(Color.accentGradient, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .stroke(LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing), style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .frame(width: 48, height: 48)
                     .rotationEffect(.degrees(rotation))
                     .onAppear {
-                        withAnimation(.linear(duration: AppConstants.Animation.spinnerDuration).repeatForever(autoreverses: false)) {
+                        withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
                             rotation = 360
                         }
                     }
             }
 
-            Text("main.view.processing.transcription")
-                .font(.system(size: AppConstants.UI.fontBodyLarge, weight: .medium))
-                .foregroundColor(.textPrimary)
+            Text("Processing transcription...")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -166,27 +168,27 @@ struct ProcessingStateView: View {
 // MARK: - Recording State View
 
 struct RecordingStateView: View {
-    @Binding var volumeLevel: Double
+    let volumeLevel: Double
     let recordingTime: TimeInterval
 
     var body: some View {
-        VStack(spacing: AppConstants.UI.spacingLG) {
-            VoiceMemoWaveformView(volumeLevel: $volumeLevel)
-                .frame(height: AppConstants.UI.waveformHeight + 10)
+        VStack(spacing: 20) {
+            VoiceMemoWaveformView(volumeLevel: volumeLevel)
+                .frame(height: 80)
 
-            HStack(spacing: AppConstants.UI.spacingXS) {
+            HStack(spacing: 8) {
                 Circle()
-                    .fill(Color.recordingRed)
+                    .fill(Color.red)
                     .frame(width: 8, height: 8)
 
                 Text(formatTime(recordingTime))
-                    .font(.system(size: AppConstants.UI.fontTimer, weight: .medium, design: .monospaced))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 28, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
             }
 
-            Text("main.view.recording.instruction")
-                .font(.system(size: AppConstants.UI.fontBody))
-                .foregroundColor(.textSecondary)
+            Text("Click to stop recording")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -205,32 +207,29 @@ struct PermissionRequiredView: View {
     let onRequestPermission: () -> Void
 
     var body: some View {
-        VStack(spacing: AppConstants.UI.spacingMD) {
-            IconContainer(
-                icon: "mic.slash.circle.fill",
-                color: .warningOrange,
-                size: AppConstants.UI.stateIconSize,
-                radius: AppConstants.UI.stateIconRadius
-            )
+        VStack(spacing: 16) {
+            Image(systemName: "mic.slash.circle.fill")
+                .font(.system(size: 56, weight: .medium))
+                .foregroundColor(.orange)
 
-            VStack(spacing: AppConstants.UI.spacingXS) {
-                Text("main.view.microphone.permission.needed")
-                    .font(.system(size: AppConstants.UI.fontSectionTitle, weight: .semibold))
-                    .foregroundColor(.textPrimary)
+            VStack(spacing: 8) {
+                Text("Microphone Permission Needed")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
 
-                Text("main.view.microphone.permission.description")
-                    .font(.system(size: AppConstants.UI.fontBody))
-                    .foregroundColor(.textSecondary)
+                Text("Please grant microphone access in System Settings to use voice transcription.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
             }
 
             Button(action: onRequestPermission) {
-                Label("main.view.enable.microphone", systemImage: "mic.fill")
-                    .font(.system(size: AppConstants.UI.fontBody, weight: .medium))
+                Label("Enable Microphone", systemImage: "mic.fill")
+                    .font(.system(size: 13, weight: .medium))
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .padding(.top, AppConstants.UI.spacingXS)
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -240,22 +239,19 @@ struct PermissionRequiredView: View {
 
 struct NoAudioDeviceView: View {
     var body: some View {
-        VStack(spacing: AppConstants.UI.spacingMD) {
-            IconContainer(
-                icon: "speaker.slash.circle.fill",
-                color: .textTertiary,
-                size: AppConstants.UI.stateIconSize,
-                radius: AppConstants.UI.stateIconRadius
-            )
+        VStack(spacing: 16) {
+            Image(systemName: "speaker.slash.circle.fill")
+                .font(.system(size: 56, weight: .medium))
+                .foregroundColor(.secondary)
 
-            VStack(spacing: AppConstants.UI.spacingXS) {
-                Text("main.view.no.audio.input.device.detected.title")
-                    .font(.system(size: AppConstants.UI.fontSectionTitle, weight: .semibold))
-                    .foregroundColor(.textPrimary)
+            VStack(spacing: 8) {
+                Text("No Audio Input Device Detected")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
 
-                Text("main.view.connect.audio.input.device.prompt")
-                    .font(.system(size: AppConstants.UI.fontBody))
-                    .foregroundColor(.textSecondary)
+                Text("Please connect a microphone or check your audio settings.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
             }

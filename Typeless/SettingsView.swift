@@ -9,6 +9,83 @@ import SwiftUI
 import ApplicationServices
 import AppKit
 
+// MARK: - Settings Primary Button Style
+
+struct SettingsPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)
+            )
+            .foregroundColor(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Settings Secondary Button Style
+
+struct SettingsSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .foregroundColor(.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Radio Button
+
+struct RadioButton: View {
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(isSelected ? Color.accentColor : Color.secondary, lineWidth: 2)
+                .frame(width: 18, height: 18)
+
+            if isSelected {
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 10, height: 10)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.2), value: isSelected)
+    }
+}
+
+// MARK: - Badge
+
+struct Badge: View {
+    let text: String
+    let color: Color
+
+    init(_ text: String, color: Color = .secondary) {
+        self.text = text
+        self.color = color
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9))
+            .foregroundColor(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+}
+
 // MARK: - Settings View
 
 struct SettingsView: View {
@@ -117,45 +194,51 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                HStack(spacing: AppConstants.UI.spacingXS) {
+                HStack(spacing: 8) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: AppConstants.UI.headerIconRadius)
-                            .fill(Color.accentGradient)
-                            .frame(width: AppConstants.UI.headerIconSize, height: AppConstants.UI.headerIconSize)
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.accentColor, .purple],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 22, height: 22)
                         Image(systemName: "gearshape.2.fill")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(.white)
                     }
                     Text(LocalizedStringKey("settings.view.title"))
-                        .font(.system(size: AppConstants.UI.fontHeader, weight: .semibold))
-                        .foregroundColor(.textPrimary)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
                 }
                 Spacer()
                 Button(action: { isPresented = false }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: AppConstants.UI.iconMedium))
-                        .foregroundColor(.textTertiary)
+                        .font(.system(size: 18))
+                        .foregroundColor(.secondary)
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help(LocalizedStringKey("settings.close.tooltip"))
             }
-            .padding(.horizontal, AppConstants.UI.spacingMD)
-            .padding(.top, AppConstants.UI.spacingSM)
-            .padding(.bottom, AppConstants.UI.spacingXS)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
 
-            Divider().overlay(Color.borderPrimary)
+            Divider().overlay(Color(nsColor: .separatorColor))
 
             // Content
             ScrollView(showsIndicators: false) {
-                VStack(spacing: AppConstants.UI.spacingMD) {
+                VStack(spacing: 16) {
                     // Model Selection Card
                     SettingsCard(
                         icon: "cpu",
-                        iconColor: .accentPurple,
+                        iconColor: .purple,
                         title: LocalizedStringKey("settings.view.model.selection.label"),
                         subtitle: LocalizedStringKey("settings.view.model.selection.subtitle")
                     ) {
-                        VStack(spacing: AppConstants.UI.spacingXS) {
+                        VStack(spacing: 8) {
                             ForEach(models, id: \.0) { model, size, description in
                                 ModelOptionRow(
                                     name: model.capitalized,
@@ -164,7 +247,7 @@ struct SettingsView: View {
                                     isSelected: selectedModel == model,
                                     isDownloaded: audioTranscriber.isModelAlreadyDownloaded(model: model)
                                 ) {
-                                    withAnimation(.spring(response: AppConstants.Animation.springResponse)) {
+                                    withAnimation(.spring(response: 0.3)) {
                                         selectedModel = model
                                     }
                                 }
@@ -175,27 +258,27 @@ struct SettingsView: View {
                     // Audio Device Card
                     SettingsCard(
                         icon: "mic",
-                        iconColor: .accentPrimary,
+                        iconColor: .accentColor,
                         title: LocalizedStringKey("settings.view.audio.input.device.label"),
                         subtitle: nil
                     ) {
                         if audioTranscriber.audioDevices.isEmpty {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle")
-                                    .foregroundColor(.warningOrange)
+                                    .foregroundColor(.orange)
                                 Text(LocalizedStringKey("settings.view.no.audio.device.available.message"))
-                                    .font(.system(size: AppConstants.UI.fontBody))
-                                    .foregroundColor(.textSecondary)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
                             }
-                            .padding(.vertical, AppConstants.UI.spacingXS)
+                            .padding(.vertical, 8)
                         } else {
-                            VStack(spacing: AppConstants.UI.spacingXXS) {
+                            VStack(spacing: 4) {
                                 ForEach(0..<audioTranscriber.audioDevices.count, id: \.self) { index in
                                     DeviceOptionRow(
                                         name: audioTranscriber.audioDevices[index].name,
                                         isSelected: selectedDeviceIndex == index
                                     ) {
-                                        withAnimation(.spring(response: AppConstants.Animation.springResponse)) {
+                                        withAnimation(.spring(response: 0.3)) {
                                             selectedDeviceIndex = index
                                         }
                                     }
@@ -207,17 +290,17 @@ struct SettingsView: View {
                     // Transcription Language Card
                     SettingsCard(
                         icon: "globe",
-                        iconColor: .successGreen,
+                        iconColor: .green,
                         title: LocalizedStringKey("settings.view.transcription.language.label"),
                         subtitle: nil
                     ) {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppConstants.UI.spacingXS) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                             ForEach(languages, id: \.0) { code, name in
                                 LanguageOptionRow(
                                     name: name,
                                     isSelected: selectedLanguage == code
                                 ) {
-                                    withAnimation(.spring(response: AppConstants.Animation.springResponse)) {
+                                    withAnimation(.spring(response: 0.3)) {
                                         selectedLanguage = code
                                     }
                                 }
@@ -228,17 +311,17 @@ struct SettingsView: View {
                     // UI Language Card
                     SettingsCard(
                         icon: "textformat",
-                        iconColor: .warningOrange,
+                        iconColor: .orange,
                         title: LocalizedStringKey("settings.view.app.language.label"),
                         subtitle: nil
                     ) {
-                        VStack(spacing: AppConstants.UI.spacingXXS) {
+                        VStack(spacing: 4) {
                             ForEach(uiLanguages, id: \.0) { code, name in
                                 LanguageOptionRow(
                                     name: name,
                                     isSelected: uiLanguage == code
                                 ) {
-                                    withAnimation(.spring(response: AppConstants.Animation.springResponse)) {
+                                    withAnimation(.spring(response: 0.3)) {
                                         uiLanguage = code
                                     }
                                 }
@@ -249,36 +332,36 @@ struct SettingsView: View {
                     // Quick Record Shortcut Card
                     SettingsCard(
                         icon: "keyboard",
-                        iconColor: .recordingRed,
+                        iconColor: .red,
                         title: LocalizedStringKey("settings.view.quick.record.shortcut.label"),
                         subtitle: LocalizedStringKey("settings.view.quick.record.shortcut.subtitle")
                     ) {
-                        VStack(spacing: AppConstants.UI.spacingSM) {
+                        VStack(spacing: 12) {
                             HStack {
                                 Text(LocalizedStringKey("settings.view.quick.record.shortcut.enable"))
-                                    .font(.system(size: AppConstants.UI.fontBody))
-                                    .foregroundColor(.textPrimary)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.primary)
                                 Spacer()
                                 Toggle("", isOn: $shortcutEnabled)
                                     .toggleStyle(SwitchToggleStyle())
                                     .labelsHidden()
-                                    .tint(.accentPrimary)
+                                    .tint(.accentColor)
                             }
 
                             if shortcutEnabled {
-                                HStack(spacing: AppConstants.UI.spacingMD) {
+                                HStack(spacing: 16) {
                                     Button(action: { startRecordingShortcut() }) {
                                         HStack(spacing: 6) {
                                             Image(systemName: isRecordingShortcut ? "record.circle" : "keyboard")
-                                                .font(.system(size: AppConstants.UI.fontCaption))
+                                                .font(.system(size: 11))
                                             Text(isRecordingShortcut ? NSLocalizedString("settings.view.quick.record.shortcut.recording", comment: "Press your shortcut...") : NSLocalizedString("settings.view.quick.record.shortcut.record", comment: "Record Shortcut"))
-                                                .font(.system(size: AppConstants.UI.fontBody))
+                                                .font(.system(size: 13))
                                         }
-                                        .padding(.horizontal, AppConstants.UI.spacingSM)
+                                        .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
-                                        .background(isRecordingShortcut ? Color.recordingRed.opacity(0.15) : Color.accentPrimary.opacity(0.1))
-                                        .foregroundColor(isRecordingShortcut ? .recordingRed : .accentPrimary)
-                                        .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+                                        .background(isRecordingShortcut ? Color.red.opacity(0.15) : Color.accentColor.opacity(0.1))
+                                        .foregroundColor(isRecordingShortcut ? .red : .accentColor)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
                                     }
                                     .buttonStyle(PlainButtonStyle())
                                     .disabled(isRecordingShortcut)
@@ -286,13 +369,13 @@ struct SettingsView: View {
                                     Spacer()
                                 }
 
-                                HStack(spacing: AppConstants.UI.spacingXXS) {
+                                HStack(spacing: 4) {
                                     Text(LocalizedStringKey("settings.view.quick.record.shortcut.current"))
-                                        .font(.system(size: AppConstants.UI.fontCaption))
-                                        .foregroundColor(.textSecondary)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
                                     Text(currentShortcutDisplay)
-                                        .font(.system(size: AppConstants.UI.fontCaption, weight: .medium))
-                                        .foregroundColor(.accentPrimary)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.accentColor)
                                 }
                             }
                         }
@@ -306,17 +389,17 @@ struct SettingsView: View {
                         )
                     }
                 }
-                .padding(.horizontal, AppConstants.UI.spacingMD)
-                .padding(.vertical, AppConstants.UI.spacingXS)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
 
-            Divider().overlay(Color.borderPrimary)
+            Divider().overlay(Color(nsColor: .separatorColor))
 
             // Footer
-            HStack(spacing: AppConstants.UI.spacingSM) {
+            HStack(spacing: 12) {
                 Button(action: { showResetConfirmation = true }) {
                     Label(LocalizedStringKey("settings.reset.button"), systemImage: "arrow.counterclockwise")
-                        .font(.system(size: AppConstants.UI.fontBody))
+                        .font(.system(size: 13))
                 }
                 .buttonStyle(SettingsSecondaryButtonStyle())
                 .help(LocalizedStringKey("settings.reset.tooltip"))
@@ -335,16 +418,16 @@ struct SettingsView: View {
 
                 Button(action: saveSettings) {
                     Label(LocalizedStringKey("general.save.button"), systemImage: "checkmark")
-                        .font(.system(size: AppConstants.UI.fontBody, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                 }
                 .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
-            .padding(.horizontal, AppConstants.UI.spacingMD)
-            .padding(.vertical, AppConstants.UI.spacingSM)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.windowHeight)
-        .background(Color.bgSecondary)
+        .frame(width: 400, height: 340)
+        .background(Color(nsColor: .controlBackgroundColor))
         .onAppear { checkAccessibilityPermission() }
         .onChange(of: uiLanguage) { viewRefreshID = UUID() }
         .id(viewRefreshID)
@@ -419,30 +502,36 @@ struct SettingsCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppConstants.UI.spacingSM) {
-            HStack(spacing: AppConstants.UI.spacingXS) {
-                IconContainer(
-                    icon: icon,
-                    color: iconColor,
-                    size: AppConstants.UI.settingsIconSize,
-                    radius: AppConstants.UI.radiusSM
-                )
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                    .foregroundColor(iconColor)
+                    .frame(width: 26, height: 26)
+                    .background(iconColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+
                 VStack(alignment: .leading, spacing: 1) {
                     Text(titleKey)
-                        .font(.system(size: AppConstants.UI.fontCardTitle, weight: .semibold))
-                        .foregroundColor(.textPrimary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
                     if let subtitleKey = subtitleKey {
                         Text(subtitleKey)
-                            .font(.system(size: AppConstants.UI.fontCaption))
-                            .foregroundColor(.textSecondary)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
                     }
                 }
                 Spacer()
             }
             content
         }
-        .padding(AppConstants.UI.spacingSM)
-        .cardStyle()
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
     }
 }
 
@@ -458,33 +547,33 @@ struct ModelOptionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: AppConstants.UI.spacingXS) {
+            HStack(spacing: 8) {
                 RadioButton(isSelected: isSelected)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
                         Text(name)
-                            .font(.system(size: AppConstants.UI.fontBody, weight: isSelected ? .semibold : .medium))
-                            .foregroundColor(.textPrimary)
-                        Badge(size, color: .textTertiary)
+                            .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                            .foregroundColor(.primary)
+                        Badge(size, color: .secondary)
                         if isDownloaded {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: AppConstants.UI.fontCaption))
-                                .foregroundColor(.successGreen)
+                                .font(.system(size: 11))
+                                .foregroundColor(.green)
                         }
                     }
                     Text(description)
-                        .font(.system(size: AppConstants.UI.fontCaption))
-                        .foregroundColor(.textSecondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
                 }
                 Spacer()
             }
             .padding(.vertical, 6)
-            .padding(.horizontal, AppConstants.UI.spacingXS)
-            .background(isSelected ? Color.accentPrimary.opacity(0.08) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+            .padding(.horizontal, 8)
+            .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
-                RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM)
-                    .stroke(isSelected ? Color.accentPrimary.opacity(0.2) : Color.clear, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.2) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -500,19 +589,19 @@ struct DeviceOptionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: AppConstants.UI.spacingXS) {
+            HStack(spacing: 8) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: AppConstants.UI.iconSmall))
-                    .foregroundColor(isSelected ? .accentPrimary : .textTertiary)
+                    .font(.system(size: 14))
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
                 Text(name)
-                    .font(.system(size: AppConstants.UI.fontBody))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 13))
+                    .foregroundColor(.primary)
                 Spacer()
             }
             .padding(.vertical, 6)
-            .padding(.horizontal, AppConstants.UI.spacingXS)
-            .background(isSelected ? Color.accentPrimary.opacity(0.08) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+            .padding(.horizontal, 8)
+            .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -527,24 +616,24 @@ struct LanguageOptionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: AppConstants.UI.spacingXS) {
+            HStack(spacing: 8) {
                 Text(name)
-                    .font(.system(size: AppConstants.UI.fontBody))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 13))
+                    .foregroundColor(.primary)
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.system(size: AppConstants.UI.fontCaption, weight: .semibold))
-                        .foregroundColor(.accentPrimary)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.accentColor)
                 }
             }
             .padding(.vertical, 6)
-            .padding(.horizontal, AppConstants.UI.spacingXS)
-            .background(isSelected ? Color.accentPrimary.opacity(0.08) : Color.bgHover)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+            .padding(.horizontal, 8)
+            .background(isSelected ? Color.accentColor.opacity(0.08) : Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
-                RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM)
-                    .stroke(isSelected ? Color.accentPrimary.opacity(0.3) : Color.clear, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -558,55 +647,56 @@ struct AccessibilityPermissionCard: View {
     let onCheckAgain: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppConstants.UI.spacingSM) {
-            HStack(spacing: AppConstants.UI.spacingXS) {
-                IconContainer(
-                    icon: "exclamationmark.triangle.fill",
-                    color: .warningOrange,
-                    size: AppConstants.UI.settingsIconSize,
-                    radius: AppConstants.UI.radiusSM
-                )
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(.orange)
+                    .frame(width: 26, height: 26)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+
                 VStack(alignment: .leading, spacing: 1) {
                     Text(LocalizedStringKey("settings.view.accessibility.permission.label"))
-                        .font(.system(size: AppConstants.UI.fontCardTitle, weight: .semibold))
-                        .foregroundColor(.textPrimary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
                     Text(LocalizedStringKey("settings.view.accessibility.permission.subtitle"))
-                        .font(.system(size: AppConstants.UI.fontCaption))
-                        .foregroundColor(.textSecondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
                 }
                 Spacer()
             }
 
             Text(LocalizedStringKey("settings.view.accessibility.permission.description"))
-                .font(.system(size: AppConstants.UI.fontCaption))
-                .foregroundColor(.textSecondary)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
                 .lineLimit(3)
 
-            Text("1. 确保应用已在「应用程序」文件夹中\n2. 点击下方按钮打开系统设置\n3. 在列表中找到 Typeless 并开启")
-                .font(.system(size: AppConstants.UI.fontCaption))
-                .foregroundColor(.textSecondary)
+            Text("1. Ensure app is in Applications folder\n2. Click button below to open System Settings\n3. Find Typeless in the list and enable it")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
                 .lineLimit(4)
 
-            HStack(spacing: AppConstants.UI.spacingSM) {
+            HStack(spacing: 12) {
                 Button(action: onOpenSettings) {
                     Label(LocalizedStringKey("settings.view.accessibility.permission.open.settings"), systemImage: "gear")
-                        .font(.system(size: AppConstants.UI.fontCaption, weight: .medium))
+                        .font(.system(size: 11, weight: .medium))
                 }
                 .buttonStyle(SettingsPrimaryButtonStyle())
 
                 Button(action: onCheckAgain) {
                     Label(LocalizedStringKey("settings.view.accessibility.permission.check.again"), systemImage: "arrow.clockwise")
-                        .font(.system(size: AppConstants.UI.fontCaption))
+                        .font(.system(size: 11))
                 }
                 .buttonStyle(SettingsSecondaryButtonStyle())
             }
         }
-        .padding(AppConstants.UI.spacingSM)
-        .background(Color.warningOrange.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusMD))
+        .padding(12)
+        .background(Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
-            RoundedRectangle(cornerRadius: AppConstants.UI.radiusMD)
-                .stroke(Color.warningOrange.opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
         )
     }
 }

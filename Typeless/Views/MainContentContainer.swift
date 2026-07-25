@@ -10,7 +10,6 @@ import SwiftUI
 // MARK: - Main Content Container
 
 struct MainContentContainer: View {
-    @ObservedObject var state: AppState
     @ObservedObject var transcriber: AudioTranscriber
     let hasCheckedModelStatus: Bool
     let isDownloadingModel: Bool
@@ -22,46 +21,52 @@ struct MainContentContainer: View {
     var body: some View {
         VStack(spacing: 0) {
             headerView
-            Divider().overlay(Color.borderPrimary)
+            Divider().overlay(Color(nsColor: .separatorColor))
             contentArea
-            Divider().overlay(Color.borderPrimary)
+            Divider().overlay(Color(nsColor: .separatorColor))
             bottomBar
         }
-        .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.windowHeight)
-        .background(Color.bgPrimary)
+        .frame(width: 400, height: 340)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var headerView: some View {
         HStack {
-            HStack(spacing: AppConstants.UI.spacingXS) {
+            HStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: AppConstants.UI.headerIconRadius)
-                        .fill(Color.accentGradient)
-                        .frame(width: AppConstants.UI.headerIconSize, height: AppConstants.UI.headerIconSize)
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.accentColor, Color.purple],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 22, height: 22)
                     Image(systemName: "waveform")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                 }
                 Text("Typeless")
-                    .font(.system(size: AppConstants.UI.fontHeader, weight: .semibold))
-                    .foregroundColor(.textPrimary)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
             }
             Spacer()
-            Button(action: { state.navigate(to: .settings) }) {
+            Button(action: { transcriber.navigate(to: .settings) }) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: AppConstants.UI.iconSmall))
-                    .foregroundColor(.textTertiary)
-                    .frame(width: AppConstants.UI.headerButtonSize, height: AppConstants.UI.headerButtonSize)
-                    .background(Color.bgHover)
-                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .frame(width: 30, height: 30)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(PlainButtonStyle())
-            .disabled(transcriber.isRecording || transcriber.isTranscribing || state.navigation == .tutorial)
-            .opacity((transcriber.isRecording || transcriber.isTranscribing || state.navigation == .tutorial) ? 0.4 : 1.0)
-            .help("main.view.settings.tooltip")
+            .disabled(transcriber.isRecording || transcriber.isTranscribing || transcriber.navigation == .tutorial)
+            .opacity((transcriber.isRecording || transcriber.isTranscribing || transcriber.navigation == .tutorial) ? 0.4 : 1.0)
+            .help("Settings")
         }
-        .padding(.horizontal, AppConstants.UI.spacingMD)
-        .padding(.vertical, AppConstants.UI.spacingSM)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder
@@ -85,7 +90,7 @@ struct MainContentContainer: View {
             ProcessingStateView()
         } else if transcriber.isRecording {
             RecordingStateView(
-                volumeLevel: $transcriber.volumeLevel,
+                volumeLevel: transcriber.volumeLevel,
                 recordingTime: transcriber.recordingTime
             )
         } else if !transcriber.hasMicrophonePermission && transcriber.permissionManager.hasRequestedPermission {
@@ -98,8 +103,8 @@ struct MainContentContainer: View {
                 isEmpty: !transcriber.hasValidTranscript,
                 onCopy: onCopy
             )
-            .padding(.horizontal, AppConstants.UI.spacingMD)
-            .padding(.vertical, AppConstants.UI.spacingSM)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
     }
 
@@ -109,20 +114,20 @@ struct MainContentContainer: View {
             if hasCheckedModelStatus && !transcriber.isCheckingPermission {
                 if !transcriber.hasMicrophonePermission {
                     Button(action: onRequestPermission) {
-                        Label("main.view.enable.microphone", systemImage: "mic.fill")
-                            .font(.system(size: AppConstants.UI.fontBody, weight: .medium))
+                        Label("Enable Microphone", systemImage: "mic.fill")
+                            .font(.system(size: 13, weight: .medium))
                     }
-                    .buttonStyle(PrimaryButtonStyle())
+                    .buttonStyle(.borderedProminent)
                 } else if transcriber.hasAvailableAudioInputDevices() {
                     RecordingButton(
                         isRecording: transcriber.isRecording,
-                        isDisabled: isDownloadingModel || state.navigation == .tutorial,
+                        isDisabled: isDownloadingModel || transcriber.navigation == .tutorial,
                         action: onToggleRecording
                     )
                 }
             }
         }
-        .padding(.horizontal, AppConstants.UI.spacingMD)
-        .padding(.vertical, AppConstants.UI.spacingSM)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 }

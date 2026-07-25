@@ -23,12 +23,12 @@ struct RecordingButton: View {
                 // Outer pulse ring when recording
                 if isRecording {
                     Circle()
-                        .stroke(Color.recordingGlow, lineWidth: 2)
-                        .frame(width: AppConstants.UI.recordButtonRingSize + 8, height: AppConstants.UI.recordButtonRingSize + 8)
+                        .stroke(Color.red.opacity(0.3), lineWidth: 2)
+                        .frame(width: 72, height: 72)
                         .scaleEffect(pulseScale)
                         .opacity(2 - pulseScale)
                         .onAppear {
-                            withAnimation(.easeInOut(duration: AppConstants.Animation.pulseRingDuration).repeatForever(autoreverses: false)) {
+                            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: false)) {
                                 pulseScale = 1.3
                             }
                         }
@@ -39,10 +39,10 @@ struct RecordingButton: View {
 
                 // Button background with gradient
                 Circle()
-                    .fill(isRecording ? AnyShapeStyle(Color.recordingGradient) : AnyShapeStyle(Color.accentGradient))
-                    .frame(width: AppConstants.UI.recordButtonSize, height: AppConstants.UI.recordButtonSize)
+                    .fill(isRecording ? AnyShapeStyle(LinearGradient(colors: [.red, .orange], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)))
+                    .frame(width: 56, height: 56)
                     .shadow(
-                        color: (isRecording ? Color.recordingGlow : Color.accentGlow),
+                        color: (isRecording ? Color.red.opacity(0.3) : Color.accentColor.opacity(0.3)),
                         radius: isPressed ? 6 : 12,
                         x: 0,
                         y: isPressed ? 2 : 6
@@ -58,7 +58,7 @@ struct RecordingButton: View {
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.4 : 1.0)
         .scaleEffect(isPressed ? 0.92 : 1.0)
-        .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: isPressed)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }

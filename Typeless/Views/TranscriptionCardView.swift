@@ -20,15 +20,15 @@ struct TranscriptionCard: View {
         VStack(spacing: 0) {
             ScrollView {
                 Text(isEmpty ? NSLocalizedString("recording.state.ready", comment: "Ready to record") : text)
-                    .font(.system(size: AppConstants.UI.fontBodyLarge))
+                    .font(.system(size: 14))
                     .lineSpacing(4)
-                    .foregroundColor(isEmpty ? .textTertiary : .textPrimary)
+                    .foregroundColor(isEmpty ? .secondary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(AppConstants.UI.spacingSM)
+                    .padding(12)
             }
-            .frame(maxHeight: AppConstants.UI.transcriptMaxHeight)
+            .frame(maxHeight: 120)
 
-            SectionDivider()
+            Divider().overlay(Color(nsColor: .separatorColor))
 
             // Footer with copy button
             HStack {
@@ -38,10 +38,10 @@ struct TranscriptionCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10))
-                        Text("main.view.copied")
-                            .font(.system(size: AppConstants.UI.fontCaption, weight: .medium))
+                        Text("Copied")
+                            .font(.system(size: 11, weight: .medium))
                     }
-                    .foregroundColor(.successGreen)
+                    .foregroundColor(.green)
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
                 } else if !isEmpty {
                     Button(action: {
@@ -49,51 +49,29 @@ struct TranscriptionCard: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             showCopiedIndicator = true
                         }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.Animation.copiedIndicatorDuration) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 showCopiedIndicator = false
                             }
                         }
                     }) {
                         Image(systemName: "doc.on.doc")
-                            .font(.system(size: AppConstants.UI.iconSmall))
-                            .foregroundColor(.textTertiary)
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .help(NSLocalizedString("main.view.copy.tooltip", comment: "Copy to clipboard"))
                 }
             }
-            .padding(.horizontal, AppConstants.UI.spacingSM)
-            .padding(.vertical, AppConstants.UI.spacingXS)
-            .background(Color.bgHover.opacity(0.5))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
         }
-        .cardStyle()
-    }
-}
-
-// MARK: - Transcription State View
-
-struct TranscriptionStateView: View {
-    let transcript: String
-    let isEmpty: Bool
-    let onCopy: () -> Void
-
-    @State private var showCopiedIndicator = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                Text(isEmpty ? NSLocalizedString("recording.state.ready", comment: "Ready to record") : transcript)
-                    .font(.system(size: AppConstants.UI.fontBodyLarge))
-                    .lineSpacing(4)
-                    .foregroundColor(isEmpty ? .textTertiary : .textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, AppConstants.UI.spacingSM)
-                    .padding(.vertical, AppConstants.UI.spacingXS)
-            }
-            .frame(maxHeight: .infinity)
-        }
-        .padding(.horizontal, AppConstants.UI.spacingMD)
-        .padding(.vertical, AppConstants.UI.spacingXS)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
     }
 }

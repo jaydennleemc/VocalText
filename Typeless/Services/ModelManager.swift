@@ -10,9 +10,12 @@ final class ModelManager: ObservableObject {
     @Published var downloadStatus = ""
     @Published var isModelDownloaded = false
 
-    private var currentModel: String = AppConstants.Defaults.model
+    private var currentModel: String = "tiny"
     private var whisperKit: WhisperKit?
     private var isPreloading = false
+
+    // Model storage path
+    private let modelBasePath = "huggingface/models/argmaxinc/whisperkit-coreml"
 
     // MARK: - Model Management
 
@@ -147,7 +150,7 @@ final class ModelManager: ObservableObject {
 
     private func getModelPath(for model: String) -> String {
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
-        return "\(documentsPath)/\(AppConstants.Storage.modelBasePath)/openai_whisper-\(model)"
+        return "\(documentsPath)/\(modelBasePath)/openai_whisper-\(model)"
     }
 }
 

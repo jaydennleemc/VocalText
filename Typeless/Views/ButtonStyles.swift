@@ -12,14 +12,16 @@ import SwiftUI
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, AppConstants.UI.spacingMD)
-            .padding(.vertical, AppConstants.UI.spacingXS)
-            .background(Color.accentGradient)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)
+            )
             .foregroundColor(.white)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .opacity(configuration.isPressed ? 0.85 : 1.0)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: configuration.isPressed)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
@@ -28,14 +30,16 @@ struct PrimaryButtonStyle: ButtonStyle {
 struct SettingsPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, AppConstants.UI.spacingSM)
+            .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color.accentGradient)
+            .background(
+                LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)
+            )
             .foregroundColor(.white)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .opacity(configuration.isPressed ? 0.85 : 1.0)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: configuration.isPressed)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
@@ -44,12 +48,12 @@ struct SettingsPrimaryButtonStyle: ButtonStyle {
 struct SettingsSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, AppConstants.UI.spacingSM)
+            .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color.bgHover)
-            .foregroundColor(.textSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.UI.radiusSM))
+            .background(Color(nsColor: .controlBackgroundColor))
+            .foregroundColor(.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .opacity(configuration.isPressed ? 0.7 : 1.0)
-            .animation(.easeInOut(duration: AppConstants.Animation.buttonPressDuration), value: configuration.isPressed)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }

@@ -1,14 +1,13 @@
 import Foundation
-import CoreAudio
 
 // MARK: - Audio Device Model
 
 struct AudioDeviceModel: Identifiable, Equatable {
-    let id: AudioDeviceID
+    let id: String
     let name: String
     var uniqueID: String = ""
 
-    init(id: AudioDeviceID, name: String, uniqueID: String = "") {
+    init(id: String, name: String, uniqueID: String = "") {
         self.id = id
         self.name = name
         self.uniqueID = uniqueID

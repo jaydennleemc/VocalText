@@ -11,7 +11,6 @@ import UserNotifications
 
 struct MainView: View {
     @StateObject private var audioTranscriber = AudioTranscriber.shared
-    @StateObject private var appState = AppState()
     @State private var selectedModel = "Tiny" {
         didSet {
             UserDefaults.standard.set(selectedModel, forKey: "SelectedModel")
@@ -27,65 +26,62 @@ struct MainView: View {
     @State private var quickRecordStartTime: Date?
     @State private var quickRecordCopied = false
 
-    private let minimumRecordingDuration: TimeInterval = AppConstants.Recording.minimumDuration
+    private let minimumRecordingDuration: TimeInterval = 0.5
 
     var body: some View {
-        let state = appState
-        let transcriber = audioTranscriber
-        return ZStack(alignment: .top) {
+        ZStack(alignment: .top) {
             // Background
-            Color.bgPrimary
+            Color(nsColor: .windowBackgroundColor)
                 .ignoresSafeArea()
 
             MainContentContainer(
-                state: state,
-                transcriber: transcriber,
+                transcriber: audioTranscriber,
                 hasCheckedModelStatus: hasCheckedModelStatus,
                 isDownloadingModel: isDownloadingModel,
                 selectedModel: selectedModel,
-                onCopy: { copyToClipboard(transcriber.transcript) },
+                onCopy: { copyToClipboard(audioTranscriber.transcript) },
                 onToggleRecording: { toggleRecording() },
-                onRequestPermission: { transcriber.requestMicrophonePermission() }
+                onRequestPermission: { audioTranscriber.requestMicrophonePermission() }
             )
-            .opacity(state.navigation == .main ? 1 : 0)
+            .opacity(audioTranscriber.navigation == .main ? 1 : 0)
 
             // Settings overlay
-            if state.navigation == .settings {
+            if audioTranscriber.navigation == .settings {
                 SettingsView(isPresented: Binding(
-                    get: { state.navigation == .settings },
-                    set: { if !$0 { state.navigate(to: .main) } }
+                    get: { audioTranscriber.navigation == .settings },
+                    set: { if !$0 { audioTranscriber.navigate(to: .main) } }
                 ))
-                .environmentObject(transcriber)
+                .environmentObject(audioTranscriber)
                 .onDisappear { checkModelStatus() }
                 .transition(.opacity)
             }
 
             // Tutorial overlay
-            if state.navigation == .tutorial {
+            if audioTranscriber.navigation == .tutorial {
                 TutorialView(
                     isPresented: Binding(
-                        get: { state.navigation == .tutorial },
-                        set: { if !$0 { state.navigate(to: .main) } }
+                        get: { audioTranscriber.navigation == .tutorial },
+                        set: { if !$0 { audioTranscriber.navigate(to: .main) } }
                     ),
                     onTutorialCompleted: {
-                        if !transcriber.permissionManager.hasRequestedPermission {
-                            transcriber.checkMicrophonePermission()
+                        if !audioTranscriber.permissionManager.hasRequestedPermission {
+                            audioTranscriber.checkMicrophonePermission()
                         }
                     }
                 )
                 .transition(.opacity.combined(with: .scale))
-                .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.tutorialHeight)
+                .frame(width: 400, height: 380)
             }
 
             // Error banner
-            if state.showErrorBanner, let error = state.currentError {
+            if audioTranscriber.showErrorBanner, let error = audioTranscriber.currentError {
                 ErrorBanner(
                     message: error.errorDescription ?? "Unknown error",
                     type: error.type,
-                    onDismiss: { state.dismissError() }
+                    onDismiss: { audioTranscriber.dismissError() }
                 )
-                .padding(.top, AppConstants.UI.spacingXS)
-                .padding(.horizontal, AppConstants.UI.spacingSM)
+                .padding(.top, 8)
+                .padding(.horizontal, 12)
                 .zIndex(100)
                 .transition(.asymmetric(
                     insertion: .move(edge: .top).combined(with: .opacity),
@@ -93,10 +89,10 @@ struct MainView: View {
                 ))
             }
         }
-        .frame(width: AppConstants.UI.windowWidth, height: AppConstants.UI.windowHeight)
-        .background(Color.bgPrimary)
+        .frame(width: 400, height: 340)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear { setupOnAppear() }
-        .onDisappear { appState.cleanupErrorTimer() }
+        .onDisappear { audioTranscriber.cleanupErrorTimer() }
         .onReceive(NotificationCenter.default.publisher(for: .modelChanged)) { _ in
             if let savedModel = UserDefaults.standard.string(forKey: "SelectedModel") {
                 selectedModel = savedModel
@@ -127,14 +123,12 @@ struct MainView: View {
     // MARK: - Setup
 
     private func setupOnAppear() {
-        if audioTranscriber.delegate == nil {
-            audioTranscriber.delegate = appState
-        }
+        // AudioTranscriber now handles errors internally
 
         let hasCompletedTutorial = UserDefaults.standard.bool(forKey: "HasCompletedTutorial")
         if !hasCompletedTutorial {
-            DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.Tutorial.showDelay) {
-                appState.navigate(to: .tutorial)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                audioTranscriber.navigate(to: .tutorial)
             }
         }
 
@@ -149,7 +143,7 @@ struct MainView: View {
 
         checkModelStatus()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.Device.deviceLoadDelay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let savedDeviceIndex = UserDefaults.standard.integer(forKey: "SelectedDeviceIndex")
             if savedDeviceIndex < audioTranscriber.audioDevices.count {
                 audioTranscriber.setSelectedDevice(index: savedDeviceIndex)
@@ -236,6 +230,7 @@ struct MainView: View {
         if audioTranscriber.isRecording {
             audioTranscriber.stopRecording()
         }
+        audioTranscriber.startQuickRecord()
         isQuickRecording = true
         quickRecordStartTime = Date()
         quickRecordCopied = false
@@ -253,6 +248,7 @@ struct MainView: View {
     private func handleStopQuickRecord() {
         guard isQuickRecording, let startTime = quickRecordStartTime else {
             isQuickRecording = false
+            audioTranscriber.stopQuickRecord()
             return
         }
         let duration = Date().timeIntervalSince(startTime)
@@ -260,6 +256,7 @@ struct MainView: View {
             if audioTranscriber.isRecording { audioTranscriber.stopRecording() }
             isQuickRecording = false
             quickRecordStartTime = nil
+            audioTranscriber.stopQuickRecord()
             return
         }
         if audioTranscriber.isRecording { audioTranscriber.stopRecording() }
@@ -272,14 +269,14 @@ struct MainView: View {
         if !hasContent {
             isQuickRecording = false
             quickRecordStartTime = nil
+            audioTranscriber.stopQuickRecord()
             return
         }
         quickRecordCopied = true
+        audioTranscriber.markQuickRecordCopied()
         copyToClipboard(text)
         isQuickRecording = false
         quickRecordStartTime = nil
+        audioTranscriber.stopQuickRecord()
     }
 }
-
-// MARK: - Notification Names
-// Notification.Name extensions are defined in Extensions/Notifications.swift

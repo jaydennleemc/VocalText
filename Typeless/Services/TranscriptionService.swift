@@ -9,7 +9,7 @@ final class TranscriptionService: ObservableObject {
     @Published var transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
     @Published var hasValidTranscript = false
 
-    private var selectedLanguage: String = AppConstants.Defaults.language
+    private var selectedLanguage: String = "zh"
 
     // MARK: - Language
 
@@ -57,8 +57,8 @@ final class TranscriptionService: ObservableObject {
         do {
             let decodingOptions = DecodingOptions(
                 language: selectedLanguage,
-                temperature: AppConstants.Transcription.temperature,
-                sampleLength: AppConstants.Transcription.sampleLength
+                temperature: 0.0,
+                sampleLength: 224
             )
 
             let result = try await whisperKit.transcribe(
