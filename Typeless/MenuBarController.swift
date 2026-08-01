@@ -72,8 +72,9 @@ class MenuBarController: NSObject {
         menu.addItem(.separator())
 
         // Manual dictate (works even if hotkey fails — for diagnosis)
+        let dictating = t.isRecording || t.isQuickRecording
         let dictate = NSMenuItem(
-            title: t.isRecording ? "Stop Dictating" : "Start Dictating",
+            title: dictating ? "Stop Dictating" : "Start Dictating",
             action: #selector(toggleDictateFromMenu),
             keyEquivalent: ""
         )
@@ -115,14 +116,7 @@ class MenuBarController: NSObject {
 
     private func shortcutHintTitle() -> String {
         let key = UserDefaults.standard.string(forKey: "QuickRecordShortcutKey") ?? "cmd+shift+d"
-        let display = key
-            .replacingOccurrences(of: "cmd", with: "⌘")
-            .replacingOccurrences(of: "shift", with: "⇧")
-            .replacingOccurrences(of: "option", with: "⌥")
-            .replacingOccurrences(of: "control", with: "⌃")
-            .replacingOccurrences(of: "+", with: "")
-            .uppercased()
-        return "Hold \(display) · or use menu"
+        return "Hold \(ShortcutFormatting.display(key)) · or use menu"
     }
 
     private func observeStatusIcon() {
@@ -143,6 +137,13 @@ class MenuBarController: NSObject {
             }
             .store(in: &cancellables)
 
+        // Rebuild labels when dictate session flips (hotkey or menu).
+        Publishers.CombineLatest(t.$isRecording, t.$isQuickRecording)
+            .removeDuplicates { $0.0 == $1.0 && $0.1 == $1.1 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.rebuildMenu() }
+            .store(in: &cancellables)
+
         t.$isModelReady
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -155,6 +156,26 @@ class MenuBarController: NSObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
                 self?.statusItem.button?.toolTip = status
+            }
+            .store(in: &cancellables)
+
+        t.$lastErrorMessage
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.statusItem.button?.toolTip = message
+            }
+            .store(in: &cancellables)
+
+        // Keep keyboard session flags in sync when a session ends without
+        // going through menu/Carbon end (e.g. start failed → finishQuickSession).
+        t.$isQuickRecording
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] active in
+                if !active {
+                    self?.keyboardShortcutManager.endSession()
+                }
             }
             .store(in: &cancellables)
 
@@ -182,7 +203,7 @@ class MenuBarController: NSObject {
         statusItem.button?.toolTip = AudioTranscriber.shared.bootStatus
     }
 
-    // MARK: - Bootstrap (no MainView)
+    // MARK: - Bootstrap
 
     private func bootstrapEngine() {
         let t = AudioTranscriber.shared
@@ -230,14 +251,16 @@ class MenuBarController: NSObject {
     }
 
     /// Menu fallback when global hotkey is broken (no Accessibility / sandbox).
+    /// Toggle session — same audio path as hold, without hold-poll.
     @objc private func toggleDictateFromMenu() {
         let t = AudioTranscriber.shared
-        if t.isRecording || t.isQuickRecording {
+        let active = t.isRecording || t.isQuickRecording || keyboardShortcutManager.isQuickRecordInProgress
+        if active {
+            keyboardShortcutManager.endSession()
             stopQuickRecord()
-            keyboardShortcutManager?.forceEndDictateFlag()
         } else {
+            keyboardShortcutManager.beginMenuSession()
             startQuickRecord()
-            keyboardShortcutManager?.forceBeginDictateFlag()
         }
         rebuildMenu()
     }
@@ -263,7 +286,6 @@ class MenuBarController: NSObject {
     }
 
     deinit {
-        cancellables.forEach { $0.cancel() }
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
         }

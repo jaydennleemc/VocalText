@@ -2,17 +2,7 @@ import Foundation
 import AVFoundation
 import Accelerate
 import Combine
-import SwiftUI
-import AppKit
 import WhisperKit
-
-// MARK: - Navigation
-
-enum Navigation: Equatable {
-    case main
-    case settings
-    case tutorial
-}
 
 // MARK: - Audio Transcriber (Coordinator)
 
@@ -26,31 +16,22 @@ final class AudioTranscriber: ObservableObject {
     let deviceManager = DeviceManager()
     let permissionManager = PermissionManager()
 
+    // Live UI / shell state (menu, overlay, settings)
     @Published var isRecording = false
     @Published var isTranscribing = false
     @Published var transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
-    @Published var hasValidTranscript = false
     @Published var isDownloading = false
     @Published var downloadProgress: Double = 0.0
-    @Published var downloadStatus = NSLocalizedString("model.status.preparing", comment: "Preparing to download model")
     @Published var isModelReady = false
     @Published var bootStatus = "Starting…"
     @Published var volumeLevel: Double = 0.0
-    @Published var recordingTime: TimeInterval = 0.0
     @Published var audioDevices: [AudioDeviceModel] = []
-    @Published var selectedDeviceIndex = 0
-    @Published var hasMicrophonePermission = false
-    @Published var isCheckingPermission = true
-
-    @Published var navigation: Navigation = .main
-    @Published var currentError: TypelessError?
-    @Published var showErrorBanner = false
     @Published var isQuickRecording = false
+    /// Last user-facing error (menu tooltip / debug).
+    @Published var lastErrorMessage: String?
+    /// Shown in the dictate HUD as a failure (not a green "done" result).
+    @Published var dictateFailure: String?
 
-    private var isUserDismissed = false
-    private var errorTimer: Timer?
-    private var lastError: TypelessError?
-    private var errorCount = 0
     private var quickRecordStartTime: Date?
     private var lastRecordingDuration: TimeInterval = 0
     private var cancellables = Set<AnyCancellable>()
@@ -59,103 +40,33 @@ final class AudioTranscriber: ObservableObject {
 
     init() {
         setupBindings()
-        setupErrorObservers()
-    }
-
-    deinit {
-        cancellables.forEach { $0.cancel() }
-        cancellables.removeAll()
     }
 
     private func setupBindings() {
         recorder.$isRecording.assign(to: &$isRecording)
         recorder.$volumeLevel.assign(to: &$volumeLevel)
-        recorder.$recordingTime.assign(to: &$recordingTime)
 
         modelManager.$isDownloading.assign(to: &$isDownloading)
         modelManager.$downloadProgress.assign(to: &$downloadProgress)
-        modelManager.$downloadStatus.assign(to: &$downloadStatus)
         modelManager.$isModelReady.assign(to: &$isModelReady)
         modelManager.$bootStatus.assign(to: &$bootStatus)
 
         transcriptionService.$isTranscribing.assign(to: &$isTranscribing)
         transcriptionService.$transcript.assign(to: &$transcript)
-        transcriptionService.$hasValidTranscript.assign(to: &$hasValidTranscript)
 
         deviceManager.$audioDevices.assign(to: &$audioDevices)
-        deviceManager.$selectedDeviceIndex.assign(to: &$selectedDeviceIndex)
-
-        permissionManager.$hasMicrophonePermission.assign(to: &$hasMicrophonePermission)
-        permissionManager.$isCheckingPermission.assign(to: &$isCheckingPermission)
-    }
-
-    private func setupErrorObservers() {
-        NotificationCenter.default.publisher(for: .modelErrorOccurred)
-            .compactMap { $0.object as? TypelessError }
-            .sink { [weak self] error in self?.showError(error) }
-            .store(in: &cancellables)
-
-        NotificationCenter.default.publisher(for: .transcriptionError)
-            .compactMap { $0.object as? TypelessError }
-            .sink { [weak self] error in self?.showError(error) }
-            .store(in: &cancellables)
-    }
-
-    // MARK: - Navigation
-
-    func navigate(to destination: Navigation) {
-        if destination == .settings {
-            AppWindows.openSettings()
-            return
-        }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            navigation = destination
-        }
     }
 
     // MARK: - Errors
 
     func showError(_ error: TypelessError) {
-        if lastError == error {
-            errorCount += 1
-            if errorCount >= 3 { return }
-        } else {
-            errorCount = 1
-            lastError = error
-        }
-        currentError = error
-        isUserDismissed = false
-        withAnimation { showErrorBanner = true }
-        errorTimer?.invalidate()
-        let duration: TimeInterval
-        switch error.type {
-        case .error: duration = 5.0
-        case .warning: duration = 3.0
-        case .info: duration = 2.0
-        }
-        if error.isRecoverable {
-            errorTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
-                guard let self, !self.isUserDismissed else { return }
-                withAnimation { self.showErrorBanner = false }
-            }
-        }
-    }
-
-    func dismissError() {
-        isUserDismissed = true
-        errorTimer?.invalidate()
-        errorTimer = nil
-        withAnimation { showErrorBanner = false }
-    }
-
-    func cleanupErrorTimer() {
-        errorTimer?.invalidate()
-        errorTimer = nil
+        lastErrorMessage = error.errorDescription
+        #if DEBUG
+        print("❌ \(error.errorDescription ?? "error")")
+        #endif
     }
 
     // MARK: - Model
-
-    var isModelDownloaded: Bool { modelManager.isModelDownloaded }
 
     func isModelAlreadyDownloaded(model: String) -> Bool {
         modelManager.isModelAlreadyDownloaded(model: model)
@@ -178,24 +89,7 @@ final class AudioTranscriber: ObservableObject {
         await modelManager.prepareModelAtLaunch()
     }
 
-    func forceRetryDownload() {
-        Task {
-            _ = await checkAndDownloadModelIfNeeded()
-            if isModelDownloaded {
-                await preloadWhisperKit()
-            }
-        }
-    }
-
     // MARK: - Recording
-
-    func toggleRecording() {
-        if isRecording { stopRecording() } else { startRecording() }
-    }
-
-    func startRecording() {
-        Task { await startRecordingAsync() }
-    }
 
     @discardableResult
     func startRecordingAsync() async -> Bool {
@@ -207,15 +101,11 @@ final class AudioTranscriber: ObservableObject {
             return false
         }
 
-        // Don't hard-fail on empty list — capture session can still use default mic.
         do {
             try recorder.startRecording(deviceID: deviceManager.selectedDeviceID)
             return true
         } catch {
             showError(.audioEngineFailed(reason: error.localizedDescription))
-            #if DEBUG
-            print("❌ startRecording: \(error)")
-            #endif
             return false
         }
     }
@@ -230,11 +120,7 @@ final class AudioTranscriber: ObservableObject {
             #if DEBUG
             print("❌ Empty/short capture: \(data.count) bytes")
             #endif
-            if isQuickRecording {
-                finishQuickSession()
-            } else {
-                transcript = NSLocalizedString("error.transcription.emptyResult", comment: "")
-            }
+            finishQuickSession()
             return
         }
         processGeneration += 1
@@ -264,7 +150,10 @@ final class AudioTranscriber: ObservableObject {
                 }
 
                 guard let whisperKit = await modelManager.ensureWhisperKit() else {
-                    transcript = NSLocalizedString("model.status.load.failed", comment: "")
+                    failDictate(
+                        NSLocalizedString("model.status.load.failed", comment: ""),
+                        error: .modelLoadFailed(reason: "WhisperKit not initialized")
+                    )
                     if fromQuickRecord { finishQuickSession() }
                     return
                 }
@@ -284,8 +173,6 @@ final class AudioTranscriber: ObservableObject {
                         model: modelManager.modelName
                     )
                     if fromQuickRecord {
-                        // Let modifier keys from the hold-shortcut fully release,
-                        // then insert into the still-focused field.
                         let payload = text
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                             TextInserter.insert(payload)
@@ -295,6 +182,11 @@ final class AudioTranscriber: ObservableObject {
                     #if DEBUG
                     print("⚠️ Empty transcript for session")
                     #endif
+                    // Don't put the error string into `transcript` — overlay would show a green check.
+                    failDictate(
+                        NSLocalizedString("error.transcription.emptyResult", comment: ""),
+                        error: nil
+                    )
                 }
 
                 if fromQuickRecord {
@@ -305,7 +197,10 @@ final class AudioTranscriber: ObservableObject {
                 print("❌ processAudio: \(error)")
                 #endif
                 if generation == processGeneration {
-                    showError(.audioProcessingFailed(reason: error.localizedDescription))
+                    let message = (error as? TypelessError)?.errorDescription
+                        ?? error.localizedDescription
+                    failDictate(message, error: error as? TypelessError
+                        ?? .audioProcessingFailed(reason: error.localizedDescription))
                     if fromQuickRecord { finishQuickSession() }
                 }
             }
@@ -343,7 +238,6 @@ final class AudioTranscriber: ObservableObject {
             memcpy(dst, src, data.count)
         }
 
-        // Peak normalize. Reject near-silence (Bluetooth converter failures look like "data" but peak≈0).
         if let channel = sourceBuffer.floatChannelData?[0] {
             var peak: Float = 0
             vDSP_maxmgv(channel, 1, &peak, vDSP_Length(frameCount))
@@ -356,12 +250,11 @@ final class AudioTranscriber: ObservableObject {
                 )
             }
             if peak < 0.95 {
-                var scale = min(0.95 / peak, 40) // cap boost
+                var scale = min(0.95 / peak, 40)
                 vDSP_vsmul(channel, 1, &scale, channel, 1, vDSP_Length(frameCount))
             }
         }
 
-        // Resample to Whisper's 16 kHz.
         let targetRate: Double = 16_000
         let processed: AVAudioPCMBuffer
         if abs(sourceRate - targetRate) < 1 {
@@ -373,7 +266,6 @@ final class AudioTranscriber: ObservableObject {
         ) {
             processed = resampled
         } else {
-            // Fallback: write original rate; WhisperKit will resample on load.
             processed = sourceBuffer
         }
 
@@ -398,7 +290,8 @@ final class AudioTranscriber: ObservableObject {
 
         isQuickRecording = true
         quickRecordStartTime = Date()
-        hasValidTranscript = false
+        lastErrorMessage = nil
+        dictateFailure = nil
 
         #if DEBUG
         print("🎤 beginQuickRecord ready=\(isModelReady) boot=\(bootStatus)")
@@ -408,14 +301,14 @@ final class AudioTranscriber: ObservableObject {
             Task { await modelManager.ensureWhisperKit() }
         }
 
-        // Always go through async path (permission + capture session).
         Task {
             let ok = await startRecordingAsync()
             if !ok {
                 #if DEBUG
                 print("🎤 beginQuickRecord failed to start capture")
                 #endif
-                // Allow a moment for session to come up; don't clear flag immediately.
+                // Clears isQuickRecording so MenuBarController can endSession.
+                finishQuickSession()
             }
         }
     }
@@ -431,11 +324,9 @@ final class AudioTranscriber: ObservableObject {
         print("🎤 endQuickRecord t=\(String(format: "%.2f", duration))s recording=\(isRecording) bytes=\(bytes)")
         #endif
 
-        // Bluetooth (AirPods) often needs ~0.4–0.6s before first buffers arrive.
-        // If user released early and we have no audio yet, wait briefly for data.
+        // Bluetooth often needs a short settle before first buffers.
         if bytes < 4096, isRecording {
             Task {
-                // Poll up to ~0.5s for first audio
                 for _ in 0..<10 {
                     try? await Task.sleep(nanoseconds: 50_000_000)
                     if recorder.capturedByteCount >= 4096 { break }
@@ -475,6 +366,15 @@ final class AudioTranscriber: ObservableObject {
         quickRecordStartTime = nil
     }
 
+    private func failDictate(_ message: String, error: TypelessError?) {
+        dictateFailure = message
+        if let error {
+            showError(error)
+        } else {
+            lastErrorMessage = message
+        }
+    }
+
     // MARK: - Language / device / permission
 
     func setLanguage(_ language: String) {
@@ -493,29 +393,7 @@ final class AudioTranscriber: ObservableObject {
         deviceManager.refreshDevices()
     }
 
-    func hasAvailableAudioInputDevices() -> Bool {
-        deviceManager.hasAvailableDevices
-    }
-
     func checkMicrophonePermission() {
         permissionManager.checkMicrophonePermission()
-    }
-
-    func requestMicrophonePermission() {
-        permissionManager.requestMicrophonePermission()
-    }
-
-    func copyTranscriptToClipboard() {
-        guard hasValidTranscript, !transcript.isEmpty else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(transcript, forType: .string)
-    }
-
-    func cleanup() {
-        processGeneration += 1
-        transcriptionService.cancel()
-        _ = recorder.stopRecording()
-        finishQuickSession()
     }
 }

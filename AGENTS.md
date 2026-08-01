@@ -1,6 +1,6 @@
 # Typeless — AI Agent Instructions
 
-You are an AI coding assistant working on **Typeless**, a privacy-first macOS menu bar app for on-device voice-to-text transcription via WhisperKit.
+You are an AI coding assistant working on **Typeless**, a privacy-first macOS menu bar app for on-device voice dictation via WhisperKit (Core ML).
 
 > `CLAUDE.md` and `QWEN.md` are symlinks to this file. Edit only `AGENTS.md`.
 
@@ -10,18 +10,21 @@ You are an AI coding assistant working on **Typeless**, a privacy-first macOS me
 
 | | |
 |---|---|
-| **Product** | Typeless (legacy name “VocalText” may appear in file headers) |
+| **Product** | Typeless (legacy “VocalText” may still appear in some file headers) |
 | **Platform** | macOS 15.5+ |
 | **Language** | Swift 5 |
-| **UI** | SwiftUI + AppKit (menu bar + `NSPopover`) |
+| **UI** | AppKit shell (status item + menu + floating HUD + `NSWindow`) + SwiftUI content views |
 | **Architecture** | MVVM + service layer; `@MainActor` for UI-facing types |
 | **ML** | WhisperKit (SPM, `argmaxinc/WhisperKit`) → Core ML |
-| **Persistence** | UserDefaults |
+| **Persistence** | UserDefaults (prefs); JSON under Application Support (history) |
 | **i18n** | `Localizable.strings` — `en`, `zh-Hans`, `zh-Hant` |
 | **Bundle ID** | `com.jaydenlee.Typeless` |
-| **Sandbox** | Yes — audio input, network client (model download), user-selected files RO |
+| **Version** | 1.0.1 (CFBundleVersion 2) |
+| **Sandbox** | **Release:** yes. **Debug:** sandbox off (`Typeless.debug.entitlements`) so Carbon hotkeys + Accessibility work under Xcode |
 
-**Privacy rule:** transcription is on-device. Network is only for model download.
+**Privacy rule:** transcription is on-device. Network is only for WhisperKit model download. Never send audio or transcripts off-device.
+
+**Product model:** IME-style hold-to-dictate — **not** a popover mini-app. Primary loop is global hold shortcut → record → release → transcribe → auto-insert into the focused field. Menu “Start/Stop Dictating” is the same pipeline without the hotkey.
 
 ---
 
@@ -34,32 +37,38 @@ Typelesss/                          # repo root (note triple-s)
 ├── test-build.sh                   # local xcodebuild Release
 ├── Typeless.xcodeproj/
 ├── Typeless/                       # app target
-│   ├── TypelessApp.swift           # @main + AppDelegate
-│   ├── MenuBarController.swift     # NSStatusItem + NSPopover + shortcut actions
-│   ├── KeyboardShortcutManager.swift
-│   ├── MainView.swift              # root SwiftUI chrome + navigation shell
-│   ├── SettingsView.swift          # model / device / language / shortcuts
-│   ├── TutorialView.swift
+│   ├── TypelessApp.swift           # @main AppKit entry + AppDelegate
+│   ├── MenuBarController.swift     # NSStatusItem + NSMenu; owns overlay lifecycle
+│   ├── KeyboardShortcutManager.swift  # Carbon hold-to-dictate + session state
+│   ├── AppWindows.swift            # Settings / History NSWindows (LSUIElement)
+│   ├── SettingsView.swift          # model / speech / UI language / device / shortcut / AX
 │   ├── Models/
-│   │   ├── AudioDevice.swift       # AudioDeviceModel
-│   │   └── TypelessError.swift     # TypelessError + ErrorType
+│   │   ├── AudioDevice.swift
+│   │   ├── RecordingEntry.swift    # history row (Codable)
+│   │   └── TypelessError.swift
 │   ├── ViewModels/
-│   │   └── AudioTranscriber.swift  # coordinator + singleton (nav / errors / quick-record)
+│   │   └── AudioTranscriber.swift  # coordinator + singleton
 │   ├── Services/
-│   │   ├── AudioRecorder.swift     # AVAudioEngine capture
+│   │   ├── AudioRecorder.swift     # AVCaptureSession → Float32 PCM
 │   │   ├── TranscriptionService.swift
-│   │   ├── ModelManager.swift      # download / preload WhisperKit
+│   │   ├── ModelManager.swift
 │   │   ├── DeviceManager.swift
 │   │   ├── PermissionManager.swift
-│   │   └── TranscriptionOverlayManager.swift  # floating quick-record overlay
-│   ├── Views/                      # presentational components
-│   ├── Extensions/Notifications.swift  # error notifications only
+│   │   ├── AccessibilityAuth.swift
+│   │   ├── TextInserter.swift      # AX caret insert → synthetic ⌘V → clipboard
+│   │   ├── HistoryStore.swift      # local JSON history (cap 150)
+│   │   └── TranscriptionOverlayManager.swift  # floating dictate HUD
+│   ├── Views/
+│   │   └── HistoryView.swift
 │   ├── en.lproj/ zh-Hans.lproj/ zh-Hant.lproj/
-│   └── Typeless.entitlements
+│   ├── Typeless.entitlements       # Release (sandboxed)
+│   └── Typeless.debug.entitlements # Debug (sandbox off)
 └── TypelessTests/
 ```
 
 Root `en.lproj` / `zh-*.lproj` are symlinks into `Typeless/`.
+
+There is **no** `MainView` / popover shell / tutorial flow. Do not reintroduce them without an explicit product decision.
 
 ---
 
@@ -68,49 +77,75 @@ Root `en.lproj` / `zh-*.lproj` are symlinks into `Typeless/`.
 ### Layers
 
 ```
-AppDelegate
-  └─ MenuBarController          # status item, popover; calls AudioTranscriber.shared
-       ├─ KeyboardShortcutManager
-       ├─ TranscriptionOverlayManager
-       └─ MainView (SwiftUI)
-            └─ AudioTranscriber.shared   # @MainActor coordinator
-                 ├─ AudioRecorder
-                 ├─ ModelManager ── WhisperKit
-                 ├─ TranscriptionService
-                 ├─ DeviceManager
-                 └─ PermissionManager
+TypelessMain.main()                 # pure AppKit @main (no SwiftUI App / Settings scene)
+  └─ AppDelegate
+       └─ MenuBarController         # status item + NSMenu
+            ├─ KeyboardShortcutManager   # Carbon press + hold-poll; session flags
+            ├─ TranscriptionOverlayManager
+            └─ AppWindows                # Settings / History NSWindows
+                 └─ SettingsView / HistoryView (SwiftUI)
+
+AudioTranscriber.shared             # @MainActor coordinator
+  ├─ AudioRecorder
+  ├─ ModelManager ── WhisperKit
+  ├─ TranscriptionService
+  ├─ DeviceManager
+  ├─ PermissionManager
+  ├─ HistoryStore.shared            # written after successful transcript
+  └─ TextInserter                   # quick-record commit path
 ```
 
 ### Roles
 
 | Type | Role |
 |------|------|
-| `AudioTranscriber` | Single coordinator. Owns services, navigation, error banner, quick-record. Forwards service `@Published` via Combine. `static let shared`. |
-| Services | Single-responsibility, mostly `@MainActor` + `ObservableObject`. No UI. |
-| Views | SwiftUI only. Bind to `AudioTranscriber` / `@AppStorage`; no AVFoundation or WhisperKit. |
-| `MenuBarController` | AppKit shell: menu bar, popover lifecycle; direct method calls into `AudioTranscriber.shared`. |
+| `AudioTranscriber` | Single coordinator. Owns services, quick-record session, model/language proxies, `lastErrorMessage`. Forwards service `@Published` via Combine. `static let shared`. |
+| Services | Single-responsibility, mostly `@MainActor` + `ObservableObject` (or pure enums for helpers). No UI. |
+| Views | SwiftUI only (`SettingsView`, `HistoryView`). Bind to `AudioTranscriber` / `@AppStorage` / `HistoryStore`. No AVFoundation or WhisperKit. |
+| `MenuBarController` | AppKit shell: status item, menu actions, overlay lifecycle; calls into `AudioTranscriber.shared`. |
+| `KeyboardShortcutManager` | Carbon hotkey + hold-poll; **session state machine** shared with menu toggle. |
+| `AppWindows` | Hosts Settings and History as real `NSWindow`s. Do not rely on SwiftUI `Settings` scene for agent apps. |
 
-### Primary data flow
+### Dictate session (one state machine)
+
+Both Carbon hold and menu toggle share the same audio path (`startQuickRecord` / `stopQuickRecord`). Session flags live only in `KeyboardShortcutManager`:
+
+| Entry | Start | End |
+|-------|--------|-----|
+| **Hold (Carbon)** | `beginHoldSession()` (private) + hold-poll → `startQuickRecord()` | poll detects release → `endSession()` + `stopQuickRecord()` |
+| **Menu toggle** | `beginMenuSession()` (no poll) + `startQuickRecord()` | `endSession()` + `stopQuickRecord()` |
+
+- `isQuickRecordInProgress` blocks Carbon double-start while menu session is active.
+- Menu sessions **must not** start hold-poll (keys are not held → would auto-stop ~0.6s later).
+- Do **not** reintroduce parallel `forceBeginDictateFlag` / `forceEndDictateFlag` APIs.
+
+### Primary data flow (quick dictate)
 
 ```
-User (button / ⌘R / hold quick-record)
-  → AudioTranscriber.startRecording() / beginQuickRecord()
+User holds global shortcut (default ⌘⇧D)
+  → KeyboardShortcutManager (Carbon press + hold poll)
+  → MenuBarController.startQuickRecord()
+  → AudioTranscriber.beginQuickRecord()
   → PermissionManager + DeviceManager gates
-  → AudioRecorder (AVAudioEngine tap → Float32 buffer)
-  → stop → temp WAV via AVAudioFile
-  → ModelManager.getWhisperKit()
-  → TranscriptionService.transcribe(path, whisperKit)
-  → @Published transcript → SwiftUI re-render
-  → (quick record) auto-copy + TranscriptionOverlayManager
+  → AudioRecorder (AVCaptureSession → Float32 PCM)
+  → TranscriptionOverlayManager shows HUD near cursor
+User releases shortcut (or menu Stop)
+  → endQuickRecord() → stop capture
+  → write 16 kHz mono peak-normalized temp WAV
+  → ModelManager.ensureWhisperKit()
+  → TranscriptionService.transcribe (language, then auto-detect fallback)
+  → HistoryStore.add(...)
+  → TextInserter.insert (AX selected text → ⌘V → clipboard always)
+  → overlay shows result, then dismisses
 ```
 
 ### Cross-component communication
 
-1. **Direct calls** — Keyboard shortcuts → `MenuBarController` → `AudioTranscriber.shared` methods. Prefer this over notifications.
-2. **NotificationCenter** — only for service → coordinator errors: `.modelErrorOccurred`, `.transcriptionError` (object: `TypelessError`). Defined in `Extensions/Notifications.swift`.
-3. **Combine** — `AudioTranscriber` binds service publishers with `.assign(to: &$…)`.
+1. **Direct calls** — shortcuts / menu → `MenuBarController` → `AudioTranscriber.shared`. Prefer this over notifications.
+2. **NotificationCenter** — only Accessibility trust: `KeyboardShortcutManager` posts `.accessibilityTrustChanged` (Settings observes). No error notification bus.
+3. **Combine** — `AudioTranscriber` binds service publishers with `.assign(to: &$…)`; menu bar icon/tooltip observe coordinator state.
 
-Do **not** reintroduce a parallel AppState, MainViewDelegate, or notification bus for UI actions.
+Do **not** reintroduce a parallel AppState, popover host, or notification bus for UI actions.
 
 ---
 
@@ -118,45 +153,63 @@ Do **not** reintroduce a parallel AppState, MainViewDelegate, or notification bu
 
 ### Menu bar UX
 
-- `LSUIElement` — no Dock icon.
-- Left-click status item → toggle `NSPopover` (hosting `MainView`).
-- Right-click → context menu (Quit).
-- Window size: **400×340** (tutorial **380** height).
+- `LSUIElement` + `NSApp.setActivationPolicy(.accessory)` — no Dock icon.
+- Status item shows template SF Symbol (`waveform` / recording / loading states).
+- **Click opens `NSMenu`** (not a popover): status, retry load, hold-hint, Start/Stop Dictating, Settings… (⌘,), History (⌘Y), Quit (⌘Q).
+- Settings: `AppWindows.openSettings()` → ~520×400 window (`SettingsView`).
+- History: `AppWindows.openHistory()` → ~380×360 window (`HistoryView`).
+- App main menu (About / Settings… / Quit) is built in `KeyboardShortcutManager.setupAppMenuShortcuts()` — that is how ⌘, works (no empty SwiftUI `Settings` scene).
 
-### Recording modes
+### Dictation modes
 
-1. **Popover record** — large mic button in main UI; start/stop; result shown in card; click to copy.
-2. **Quick record** — global hold shortcut (default `cmd+shift+v`, key `QuickRecordShortcutKey`). Shows floating overlay near cursor via `TranscriptionOverlayManager`; auto-copy on success.
+1. **Hold-to-dictate (primary)** — global shortcut (default `cmd+shift+d`, keys `QuickRecordShortcutKey` / `QuickRecordShortcutEnabled`). Carbon hotkey starts; poll timer ends when required modifiers are released. Floating HUD via `TranscriptionOverlayManager`. On success: auto-insert + history.
+2. **Menu dictate** — same pipeline as toggle (start/stop), for diagnosis / no Accessibility.
+
+> **Not streaming ASR.** Audio is captured while held, then transcribed as a whole after release. Waveform in the HUD is live level only.
+
+### Auto-insert (`TextInserter`)
+
+Preference order:
+
+1. Accessibility `kAXSelectedTextAttribute` on focused element (insert at caret).
+2. Clipboard + synthetic ⌘V (needs Accessibility for `CGEvent`).
+3. Always leave text on the general pasteboard as fallback.
+
+Requires Accessibility trust (`AccessibilityAuth`). Settings UI guides the user; Debug builds run unsandboxed so AX/hotkeys work from DerivedData.
+
+### History
+
+- `HistoryStore.shared` — JSON file: `~/Library/Application Support/Typeless/transcription_history.json`
+- Cap **150** entries; newest first.
+- Model: `RecordingEntry` (id, date, duration, transcript, language, model).
 
 ### Models (WhisperKit)
 
 | Variant | Approx. size | Notes |
 |---------|--------------|--------|
-| tiny | ~75MB | Default |
-| base | ~150MB | |
-| small | ~480MB | Good accuracy/speed balance |
-| medium | ~1.5GB | Highest quality in app UI |
-| large-v3 | ~3GB | Largest option in settings |
+| small | ~480 MB | Lowest tier still offered |
+| medium | ~1.5 GB | **Default**; unknown/legacy names clamp here |
+| large-v3 | ~3 GB | Highest quality in UI |
 
-Storage path: `~/Documents/huggingface/models/argmaxinc/whisperkit-coreml/`
+- Allowed set is hard-coded in `ModelManager` / `SettingsView`: `small`, `medium`, `large-v3`.
+- Storage: `~/Documents/huggingface/models/argmaxinc/whisperkit-coreml/`
+- Lifecycle: `isModelAlreadyDownloaded` (required `.mlmodelc` dirs + `config.json`) → `WhisperKit.download` → `preloadWhisperKit()` / `prepareModelAtLaunch()` → reuse instance.
+- Boot progress / status: `ModelManager.bootStatus` (also mirrored on `AudioTranscriber`).
 
-Lifecycle: `isModelAlreadyDownloaded` (checks required `.mlmodelc` + `Config.json`) → `WhisperKit.download` → `preloadWhisperKit()` → reuse instance.
+### Speech languages (settings picker)
 
-Optional first-launch: `AppDelegate.copyPreDownloadedModelsIfNeeded()` copies bundled models if present.
+`zh`, `yue`, `en`, `ja`, `ko`, `fr`, `de`, `es` (default speech language `zh`). Empty results retry with Whisper language detection.
 
-### Global shortcuts (`KeyboardShortcutManager`)
+### Global shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| ⌘R | Toggle recording |
-| ⌥⌘R | Force retry model download |
-| ⌘C | Copy transcript |
-| ⌘S / ⌘, | Open settings |
-| ⌘W | Close popover |
-| ⌘T | Show tutorial |
-| Configurable hold (default ⌘⇧V) | Quick record (keyDown start / keyUp stop) |
+| Hold configurable combo (default **⌘⇧D**) | Quick dictate (press start / release stop) |
+| ⌘, | Open Settings (status menu + app menu → `AppWindows`) |
+| ⌘Y | Open History |
+| ⌘Q | Quit |
 
-Global monitors need Accessibility permission for some environments; settings UI includes accessibility guidance.
+Hold shortcut uses **Carbon** `RegisterEventHotKey` + release polling. Shared UserDefaults keys with Settings: `QuickRecordShortcutKey`, `QuickRecordShortcutEnabled`. Legacy `cmd+shift+v` is migrated to `cmd+shift+d` on launch. Display formatting: `ShortcutFormatting.display(_:)`.
 
 ---
 
@@ -165,15 +218,16 @@ Global monitors need Accessibility permission for some environments; settings UI
 ### Concurrency & threading
 
 - UI-facing `ObservableObject`s: `@MainActor`.
-- Audio engine callbacks may leave the main actor — hop back with `Task { @MainActor in … }` for published updates.
+- Capture callbacks may leave the main actor — hop back with `Task { @MainActor in … }` for published updates.
 - Use `[weak self]` in closures and Notification observers.
-- Clean up: cancel Combine bags, `Timer.invalidate()`, remove audio taps, remove observers, delete temp WAV files.
+- Clean up: cancel Combine bags, `Timer.invalidate()`, stop capture session, remove observers, delete temp WAV files.
+- Stale transcription races: `processGeneration` in `AudioTranscriber` — bump on each stop; ignore outdated `processAudio` Tasks.
 
 ### Errors
 
-- Use `TypelessError` (`Models/TypelessError.swift`) for all user-facing failures.
-- Surface via `AudioTranscriber.showError` → `ErrorBanner` in `MainView`.
-- Prefer `TypelessError` properties: `type` (warning/error/info), `isRecoverable`.
+- Use `TypelessError` for user-facing failures.
+- Surface via `AudioTranscriber.showError` → `lastErrorMessage` (menu tooltip / DEBUG log). No error banner UI.
+- Prefer `TypelessError.isRecoverable` when deciding whether to retry.
 
 ### Localization
 
@@ -181,21 +235,22 @@ Global monitors need Accessibility permission for some environments; settings UI
 - Key style: `module.element.description` (e.g. `error.audio.permissionDenied`).
 - Update **all three** catalogs under `Typeless/{en,zh-Hans,zh-Hant}.lproj/Localizable.strings`.
 
-### SwiftUI patterns
+### SwiftUI / AppKit patterns
 
 ```swift
-@StateObject / shared AudioTranscriber.shared for cross-window access
+AudioTranscriber.shared          // cross-window coordinator
 @EnvironmentObject when injected
-@AppStorage("selectedLanguage") for UI language prefs
+@AppStorage("selectedLanguage")  // UI chrome language
+AppWindows.openSettings()        // never rely on showSettingsWindow: for agent apps
+// Entry is pure AppKit @main — do not re-add SwiftUI App + empty Settings scene
 ```
-
-Navigation: `AudioTranscriber.navigation` → `.main | .settings | .tutorial`.
 
 ### Memory & resources
 
-- Cap recording buffer (~100MB in `AudioRecorder`).
-- Always `removeTap` + `stop` engine on stop/failure.
-- Temp files under `FileManager.default.temporaryDirectory` — delete in `defer`.
+- Cap recording buffer (~100 MB in `AudioRecorder`).
+- Always stop capture session cleanly on stop/failure.
+- Temp WAV under `FileManager.default.temporaryDirectory` — delete in `defer`.
+- Resample/peak-normalize to **16 kHz mono** before Whisper (see `AudioTranscriber.writeWAV`).
 
 ### Access control & style
 
@@ -203,8 +258,8 @@ Navigation: `AudioTranscriber.navigation` → `.main | .settings | .tutorial`.
 - Functions: verb phrases; booleans: `is` / `has` prefixes.
 - `private` by default.
 - Mixed EN/ZH comments are OK; DEBUG logs only inside `#if DEBUG`.
-- Prefer small presentational views under `Views/` over growing `MainView` / `SettingsView` further.
-- Keep the stack lean: no parallel state objects, unused design-token catalogs, or pass-through notification buses.
+- Prefer small presentational views under `Views/` over growing `SettingsView` further.
+- Keep the stack lean: no parallel state objects, design-token catalogs, popover shells, or notification buses for single-caller actions.
 
 ---
 
@@ -212,16 +267,17 @@ Navigation: `AudioTranscriber.navigation` → `.main | .settings | .tutorial`.
 
 | Task | Start here |
 |------|------------|
-| Record pipeline | `Services/AudioRecorder.swift`, `ViewModels/AudioTranscriber.swift` |
+| Record / dictate pipeline | `ViewModels/AudioTranscriber.swift`, `Services/AudioRecorder.swift` |
 | Transcription | `Services/TranscriptionService.swift`, `Services/ModelManager.swift` |
-| Model download/path | `ModelManager.swift` |
-| Devices | `Services/DeviceManager.swift`, `Models/AudioDevice.swift` |
-| Permissions | `Services/PermissionManager.swift` |
-| Menu bar / popover | `MenuBarController.swift` |
-| Shortcuts | `KeyboardShortcutManager.swift` |
-| Floating overlay | `TranscriptionOverlayManager.swift` |
+| Auto-insert into apps | `Services/TextInserter.swift`, `Services/AccessibilityAuth.swift` |
+| History | `Services/HistoryStore.swift`, `Views/HistoryView.swift`, `Models/RecordingEntry.swift` |
+| Menu bar shell | `MenuBarController.swift` |
+| Hold shortcut + session | `KeyboardShortcutManager.swift` |
+| Floating HUD | `TranscriptionOverlayManager.swift` |
+| Settings / History windows | `AppWindows.swift`, `SettingsView.swift` |
+| Devices / mic permission | `DeviceManager.swift`, `PermissionManager.swift` |
 | Errors | `Models/TypelessError.swift` |
-| Notifications | `Extensions/Notifications.swift` |
+| App entry | `TypelessApp.swift` |
 | Tests | `TypelessTests/` |
 
 ---
@@ -232,31 +288,32 @@ Navigation: `AudioTranscriber.navigation` → `.main | .settings | .tutorial`.
 
 1. Add keys to all three `Localizable.strings`.
 2. Wire UI language picker in `SettingsView` if needed.
-3. `MenuBarController.updateLocale()` already reacts to UserDefaults.
 
 ### Add a speech language for Whisper
 
-1. Add option in `SettingsView` language list.
-2. Persist selection; call `AudioTranscriber.setLanguage` → `TranscriptionService.setLanguage`.
-3. Pass via `DecodingOptions(language:)` (already wired).
+1. Add option in `SettingsView` `languages` list.
+2. Persist `SelectedLanguage`; call `AudioTranscriber.setLanguage` → `TranscriptionService.setLanguage`.
+3. Pass via `DecodingOptions(language:)` (already wired; empty-result auto-detect remains).
 
-### Add a keyboard shortcut
+### Change the dictate hotkey
 
-1. Handle in `KeyboardShortcutManager.handleKeyEvent` (and keyUp if hold-based).
-2. Call a method on `MenuBarController` that hits `AudioTranscriber.shared` (or the overlay).
-3. Document in README if user-facing.
+1. Persist `QuickRecordShortcutKey` / `QuickRecordShortcutEnabled` (Settings already does).
+2. `KeyboardShortcutManager.installAll()` re-registers Carbon hotkey.
+3. Keep Settings and manager defaults in sync (`cmd+shift+d`).
 
-### Change audio format / WAV path
+### Change audio capture / WAV path
 
-1. Capture: `AudioRecorder` (Float32 from engine).
-2. Write: `AudioTranscriber.processAudio` uses `AVAudioFile` for temp WAV.
-3. Sample rate comes from the input format (default fallback 44100 mono).
+1. Capture: `AudioRecorder` (`AVCaptureSession` → Float32).
+2. Write: `AudioTranscriber.writeWAV` — 16 kHz mono + peak normalize.
+3. Do not skip silence rejection (near-zero peak often means Bluetooth converter failure).
+
+### Touch auto-insert behavior
+
+Edit `TextInserter` only. Keep clipboard-as-fallback. Do not require network. Respect Accessibility denial (copy-only path).
 
 ### Add a notification
 
-Only if you truly need service → coordinator fan-out. Prefer method calls.
-1. Add `static let …` on `Notification.Name` in `Extensions/Notifications.swift`.
-2. Post with `.name` syntax only.
+Only if you truly need fan-out. Prefer method calls. Accessibility trust is the only app-wide name today (`.accessibilityTrustChanged` next to `KeyboardShortcutManager`).
 
 ---
 
@@ -275,39 +332,48 @@ xcodebuild test -project Typeless.xcodeproj -scheme Typeless -destination 'platf
 
 - Scheme: **Typeless**
 - Deployment target: **macOS 15.5**
+- Debug uses `Typeless.debug.entitlements` (sandbox **off**) so hotkeys/AX work from DerivedData.
+- Release uses `Typeless.entitlements` (sandbox **on**).
 - Do not commit DerivedData, `.build`, or user xcuserdata.
+
+**Accessibility when debugging from Xcode:** enable the **DerivedData** binary (not only `/Applications/Typeless.app`) in System Settings → Privacy & Security → Accessibility. `AccessibilityAuth.processPathHint` shows the path.
 
 ---
 
 ## Security & Entitlements
 
-`Typeless.entitlements`:
+**Release** (`Typeless.entitlements`):
 
 - `com.apple.security.app-sandbox`
 - `com.apple.security.device.audio-input`
 - `com.apple.security.network.client` — model download only
 - `com.apple.security.files.user-selected.read-only`
 
-Never expand network/file entitlements without a clear product need. Do not send audio or transcripts off-device.
+**Debug** (`Typeless.debug.entitlements`): sandbox disabled + `get-task-allow` for iterative hotkey/AX work.
+
+Never expand network entitlements without a clear product need. Do not send audio or transcripts off-device.
 
 ---
 
 ## Agent Workflow
 
 1. **Explore** with Grep/Read; match existing style before editing.
-2. **Prefer surgical edits** over large rewrites of `SettingsView` / `MainView`.
+2. **Prefer surgical edits** over large rewrites of `SettingsView` / overlay code.
 3. **Respect layers**: Views → ViewModels → Services → system frameworks.
 4. **No new third-party deps** unless agreed; WhisperKit is the only SPM product.
-5. **After behavior changes**, run `./test-build.sh` or Xcode build; run `TypelessTests` when touching models/errors.
+5. **After behavior changes**, run `./test-build.sh` or Xcode build; run `TypelessTests` when touching models/errors/history.
 6. **Cite code** as `startLine:endLine:path` when explaining.
 7. Stay concise: concrete diffs and examples over long essays.
-8. **YAGNI**: do not reintroduce AppState, design-token files, or notification buses for single-caller actions.
+8. **YAGNI**: do not reintroduce AppState, design-token files, popover mini-app shell, empty SwiftUI `Settings` scenes, or notification buses for single-caller actions.
+9. Treat **hold-to-dictate + auto-insert** as the product spine; polish that path first.
 
 ### Known debt / pitfalls
 
-- `SettingsView.swift` is still large (~700 lines) with local button styles.
+- `SettingsView.swift` is large (~450+ lines) with multi-page sidebar chrome.
 - File headers may still say “VocalText”.
-- `SettingsView` / `KeyboardShortcutManager` share `QuickRecordShortcutKey` + `QuickRecordShortcutEnabled` UserDefaults keys — keep them in sync.
+- `SettingsView` / `KeyboardShortcutManager` share `QuickRecordShortcutKey` + `QuickRecordShortcutEnabled` — keep them in sync.
+- Sandbox vs Accessibility: Release sandbox + global hotkeys is constrained; Debug intentionally unsandboxed.
+- Menu dictate is **toggle** (no hold-poll); Carbon is **hold**. Keep that distinction in `KeyboardShortcutManager` session APIs.
 
 ---
 
@@ -315,5 +381,7 @@ Never expand network/file entitlements without a clear product need. Do not send
 
 - [WhisperKit](https://github.com/argmaxinc/WhisperKit)
 - [SwiftUI](https://developer.apple.com/documentation/swiftui)
-- [AVAudioEngine](https://developer.apple.com/documentation/avfaudio/avaudioengine)
+- [AVCaptureSession](https://developer.apple.com/documentation/avfoundation/avcapturesession)
 - [NSStatusBar](https://developer.apple.com/documentation/appkit/nsstatusbar)
+- [Accessibility / AXUIElement](https://developer.apple.com/documentation/applicationservices/axuielement)
+- [Carbon Event Manager hot keys](https://developer.apple.com/documentation/carbonsound)

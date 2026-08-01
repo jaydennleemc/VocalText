@@ -20,11 +20,8 @@ enum AppWindows {
             size: NSSize(width: 520, height: 400),
             minSize: NSSize(width: 480, height: 360)
         ) {
-            SettingsView(isPresented: Binding(
-                get: { true },
-                set: { if !$0 { settingsWindow?.close() } }
-            ))
-            .environmentObject(AudioTranscriber.shared)
+            SettingsView()
+                .environmentObject(AudioTranscriber.shared)
         }
     }
 
@@ -51,7 +48,6 @@ enum AppWindows {
         NSApp.activate(ignoringOtherApps: true)
 
         if let window = existing {
-            // Recreate content if needed so settings always see current state
             if !window.isVisible {
                 window.contentViewController = NSHostingController(rootView: content())
             }
@@ -73,7 +69,6 @@ enum AppWindows {
         window.isReleasedWhenClosed = false
         window.center()
         window.makeKeyAndOrderFront(nil)
-        // Agent apps sometimes need an explicit level bump after activate
         window.level = .normal
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 

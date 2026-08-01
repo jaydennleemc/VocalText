@@ -23,10 +23,4 @@ struct RecordingEntry: Identifiable, Codable, Equatable {
         self.language = language
         self.model = model
     }
-
-    var preview: String {
-        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count <= 80 { return trimmed }
-        return String(trimmed.prefix(80)) + "…"
-    }
 }

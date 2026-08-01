@@ -16,21 +16,20 @@ final class TranscriptionOverlayManager {
     private var hostingController: NSHostingController<OverlayRoot>?
     private var cancellables = Set<AnyCancellable>()
     private var hideWorkItem: DispatchWorkItem?
-    private var currentPhase: OverlayPhase = .idle
 
     /// Shared model — update properties, never replace rootView (keeps waveform state alive).
     private let model = OverlayModel()
 
-    /// Compact pill while listening / transcribing.
-    private let compactSize = CGSize(width: 220, height: 44)
-    /// Expanded bubble for full transcript preview.
-    private let resultMaxSize = CGSize(width: 320, height: 160)
-    private let marginFromCursor: CGFloat = 22
+    /// Capsule height is fixed; width grows with content (true pill / 胶囊).
+    private let pillHeight: CGFloat = 28
+    private let compactSize = CGSize(width: 140, height: 28)
+    /// Success can grow wider; still one capsule (height fixed).
+    private let resultMaxWidth: CGFloat = 280
+    private let marginFromCursor: CGFloat = 14
 
     func showOverlay(transcriber: AudioTranscriber) {
         hideWorkItem?.cancel()
         hideWorkItem = nil
-        currentPhase = .listening
 
         model.phase = .listening
         model.text = ""
@@ -51,15 +50,16 @@ final class TranscriptionOverlayManager {
             transcriber.$isTranscribing,
             transcriber.$transcript
         )
+        .combineLatest(transcriber.$dictateFailure)
         .receive(on: DispatchQueue.main)
-        .sink { [weak self] quick, recording, transcribing, text in
+        .sink { [weak self] state, failure in
             guard let self else { return }
+            let (quick, recording, transcribing, text) = state
             let ready = NSLocalizedString("recording.state.ready", comment: "")
 
             if quick || recording {
                 self.hideWorkItem?.cancel()
                 self.hideWorkItem = nil
-                self.currentPhase = .listening
                 self.model.phase = .listening
                 self.model.text = ""
                 self.model.volume = transcriber.volumeLevel
@@ -69,24 +69,30 @@ final class TranscriptionOverlayManager {
             if transcribing {
                 self.hideWorkItem?.cancel()
                 self.hideWorkItem = nil
-                self.currentPhase = .transcribing
                 self.model.phase = .transcribing
                 self.model.text = ""
                 self.model.volume = 0
                 self.resizeWindow(to: self.compactSize, reanchor: false)
                 return
             }
+            // Failure first — never show error copy with a green check.
+            if let failure, !failure.isEmpty {
+                self.model.phase = .failed
+                self.model.text = failure
+                self.model.volume = 0
+                self.resizeWindow(to: self.capsuleSize(for: failure), reanchor: false)
+                self.scheduleHide(after: 2.0)
+                return
+            }
             if !text.isEmpty && text != ready {
-                self.currentPhase = .done
                 self.model.phase = .done
                 self.model.text = text
                 self.model.volume = 0
-                self.resizeWindow(to: self.resultSize(for: text), reanchor: false)
-                // Longer hide so user can read the full result.
-                let seconds = min(4.0, max(2.0, Double(text.count) * 0.06))
+                self.resizeWindow(to: self.capsuleSize(for: text), reanchor: false)
+                let seconds = min(3.2, max(1.6, Double(text.count) * 0.05))
                 self.scheduleHide(after: seconds)
             } else {
-                self.currentPhase = .idle
+                // Short cancel / quiet discard — no scary error toast.
                 self.model.phase = .idle
                 self.model.text = ""
                 self.model.volume = 0
@@ -99,7 +105,7 @@ final class TranscriptionOverlayManager {
         transcriber.$volumeLevel
             .receive(on: DispatchQueue.main)
             .sink { [weak self] volume in
-                guard let self, self.currentPhase == .listening else { return }
+                guard let self, self.model.phase == .listening else { return }
                 self.model.volume = volume
             }
             .store(in: &cancellables)
@@ -113,7 +119,6 @@ final class TranscriptionOverlayManager {
         overlayWindow?.contentViewController = nil
         overlayWindow = nil
         hostingController = nil
-        currentPhase = .idle
         model.phase = .idle
         model.volume = 0
         model.text = ""
@@ -127,7 +132,17 @@ final class TranscriptionOverlayManager {
     }
 
     private func installWindow() {
-        hostingController = NSHostingController(rootView: OverlayRoot(model: model))
+        let hosting = NSHostingController(rootView: OverlayRoot(model: model))
+        hostingController = hosting
+
+        // Hosting views default to an opaque chrome color — force true clear.
+        hosting.view.wantsLayer = true
+        hosting.view.layer?.backgroundColor = NSColor.clear.cgColor
+        hosting.view.layer?.isOpaque = false
+        if #available(macOS 13.0, *) {
+            // Avoid solid fill under SwiftUI content.
+            hosting.sizingOptions = []
+        }
 
         let window = NSPanel(
             contentRect: NSRect(origin: .zero, size: compactSize),
@@ -135,8 +150,10 @@ final class TranscriptionOverlayManager {
             backing: .buffered,
             defer: false
         )
-        window.contentViewController = hostingController
+        window.contentViewController = hosting
         window.contentView?.wantsLayer = true
+        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
+        window.contentView?.layer?.isOpaque = false
         window.contentView?.layer?.masksToBounds = false
         window.setContentSize(compactSize)
         window.level = .floating
@@ -152,18 +169,17 @@ final class TranscriptionOverlayManager {
         overlayWindow = window
     }
 
-    private func resultSize(for text: String) -> CGSize {
+    /// Always a fixed-height capsule; width fits a single line of text.
+    private func capsuleSize(for text: String) -> CGSize {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        let maxTextWidth = resultMaxSize.width - 48 // padding + icon
-        let bounds = (trimmed as NSString).boundingRect(
-            with: NSSize(width: maxTextWidth, height: resultMaxSize.height - 28),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font]
+        let font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        let horizontalChrome: CGFloat = 34 // icon + padding
+        let bounds = (trimmed as NSString).size(withAttributes: [.font: font])
+        let width = min(
+            resultMaxWidth,
+            max(compactSize.width, ceil(bounds.width) + horizontalChrome)
         )
-        let width = min(resultMaxSize.width, max(compactSize.width, ceil(bounds.width) + 56))
-        let height = min(resultMaxSize.height, max(compactSize.height, ceil(bounds.height) + 28))
-        return CGSize(width: width, height: height)
+        return CGSize(width: width, height: pillHeight)
     }
 
     private func resizeWindow(to size: CGSize, reanchor: Bool) {
@@ -214,7 +230,7 @@ private final class OverlayModel: ObservableObject {
 }
 
 private enum OverlayPhase: Equatable {
-    case idle, listening, transcribing, done
+    case idle, listening, transcribing, done, failed
 }
 
 // MARK: - Root
@@ -226,46 +242,90 @@ private struct OverlayRoot: View {
         Group {
             switch model.phase {
             case .listening:
-                DictatePill(corner: 20) {
+                DictatePill {
                     ListeningContent(level: model.volume)
                 }
             case .transcribing:
-                DictatePill(corner: 20) {
+                DictatePill {
                     TranscribingContent()
                 }
             case .done:
-                DictatePill(corner: 16) {
-                    DoneContent(text: model.text)
+                DictatePill {
+                    ResultContent(text: model.text, style: .success)
+                }
+            case .failed:
+                DictatePill {
+                    ResultContent(text: model.text, style: .failure)
                 }
             case .idle:
                 Color.clear
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
     }
 }
 
-// MARK: - Shell
+// MARK: - Shell (true capsule / 胶囊)
 
 private struct DictatePill<Content: View>: View {
-    var corner: CGFloat = 20
     @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
+                // Capsule mask on vibrancy = elliptical ends at any height.
+                VisualEffectCapsule(material: .hudWindow)
             }
+            .clipShape(Capsule(style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5)
             }
-            .padding(4)
+            .shadow(color: .black.opacity(0.20), radius: 6, y: 2)
+            .padding(2)
+    }
+}
+
+/// Translucent HUD glass; corner radius follows height so ends stay fully round.
+private struct VisualEffectCapsule: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .hudWindow
+
+    func makeNSView(context: Context) -> CapsuleEffectView {
+        let view = CapsuleEffectView()
+        view.material = material
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ view: CapsuleEffectView, context: Context) {
+        view.material = material
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.needsLayout = true
+    }
+}
+
+private final class CapsuleEffectView: NSVisualEffectView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        layer?.cornerCurve = .continuous
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layout() {
+        super.layout()
+        // True capsule: radius = half height → elliptical / 半圆端.
+        layer?.cornerRadius = bounds.height / 2
     }
 }
 
@@ -275,11 +335,11 @@ private struct ListeningContent: View {
     let level: Double
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(Color.red)
-                .frame(width: 7, height: 7)
-                .shadow(color: .red.opacity(0.55), radius: 3)
+                .frame(width: 5, height: 5)
+                .shadow(color: .red.opacity(0.5), radius: 2)
 
             CompactWaveform(level: level)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -287,12 +347,12 @@ private struct ListeningContent: View {
     }
 }
 
-/// Live bars that always span the full available width.
+/// Live bars that span the pill width.
 private struct CompactWaveform: View {
     let level: Double
 
-    private let barCount = 36
-    @State private var bars: [CGFloat] = Array(repeating: 0.14, count: 36)
+    private let barCount = 22
+    @State private var bars: [CGFloat] = Array(repeating: 0.14, count: 22)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -300,15 +360,14 @@ private struct CompactWaveform: View {
             Canvas { context, size in
                 guard barCount > 0, size.width > 1, size.height > 1 else { return }
 
-                // Fill entire width: compute bar width + gap so bars reach the right edge.
-                let gap: CGFloat = 1.5
+                let gap: CGFloat = 1.2
                 let totalGap = gap * CGFloat(barCount - 1)
-                let barWidth = max(1.5, (size.width - totalGap) / CGFloat(barCount))
+                let barWidth = max(1.2, (size.width - totalGap) / CGFloat(barCount))
                 let step = barWidth + gap
                 let midY = size.height / 2
 
                 for i in 0..<barCount {
-                    let h = max(3, bars[i] * size.height * 0.92)
+                    let h = max(2.5, bars[i] * size.height * 0.88)
                     let x = CGFloat(i) * step
                     let rect = CGRect(x: x, y: midY - h / 2, width: barWidth, height: h)
                     let alpha = 0.40 + Double(bars[i]) * 0.60
@@ -358,13 +417,13 @@ private struct CompactWaveform: View {
 
 private struct TranscribingContent: View {
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             ProgressView()
-                .controlSize(.small)
+                .controlSize(.mini)
                 .tint(.secondary)
 
             Text(NSLocalizedString("overlay.transcribing", comment: "Transcribing…"))
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
@@ -373,29 +432,46 @@ private struct TranscribingContent: View {
     }
 }
 
-// MARK: - Done (full transcript, multi-line)
+// MARK: - Result (success or failure)
 
-private struct DoneContent: View {
+private struct ResultContent: View {
+    enum Style {
+        case success, failure
+
+        var icon: String {
+            switch self {
+            case .success: return "checkmark.circle.fill"
+            case .failure: return "exclamationmark.triangle.fill"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .success: return .green
+            case .failure: return .orange
+            }
+        }
+    }
+
     let text: String
+    let style: Style
 
     private var bodyText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.green)
+        HStack(alignment: .center, spacing: 5) {
+            Image(systemName: style.icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(style.color)
                 .symbolRenderingMode(.hierarchical)
-                .padding(.top, 1)
 
             Text(bodyText)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-                .lineLimit(6)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

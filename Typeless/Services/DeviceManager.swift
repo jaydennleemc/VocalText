@@ -7,7 +7,6 @@ import AVFoundation
 final class DeviceManager: ObservableObject {
     @Published var audioDevices: [AudioDeviceModel] = []
     @Published var selectedDeviceIndex = 0
-    @Published var hasAvailableDevices = false
 
     init() {
         refreshDevices()
@@ -36,12 +35,10 @@ final class DeviceManager: ObservableObject {
         var devices = discovery.devices.map {
             AudioDeviceModel(id: $0.uniqueID, name: $0.localizedName)
         }
-        // Fallback
         if devices.isEmpty, let def = AVCaptureDevice.default(for: .audio) {
             devices = [AudioDeviceModel(id: def.uniqueID, name: def.localizedName)]
         }
         audioDevices = devices
-        hasAvailableDevices = !devices.isEmpty
         if selectedDeviceIndex >= devices.count {
             selectedDeviceIndex = 0
         }

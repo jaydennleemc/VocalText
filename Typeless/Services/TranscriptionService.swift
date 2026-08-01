@@ -7,7 +7,6 @@ import WhisperKit
 final class TranscriptionService: ObservableObject {
     @Published var isTranscribing = false
     @Published var transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
-    @Published var hasValidTranscript = false
 
     private var selectedLanguage = "zh"
     private var activeTask: Task<String, Error>?
@@ -31,17 +30,14 @@ final class TranscriptionService: ObservableObject {
 
         guard let whisperKit else {
             transcript = NSLocalizedString("model.status.load.failed", comment: "")
-            hasValidTranscript = false
             return ""
         }
 
         guard FileManager.default.fileExists(atPath: audioFilePath) else {
-            hasValidTranscript = false
             return ""
         }
 
         isTranscribing = true
-        hasValidTranscript = false
 
         let language = Self.normalizeLanguageCode(selectedLanguage)
 
@@ -67,14 +63,17 @@ final class TranscriptionService: ObservableObject {
         }
 
         text = Self.cleanupTranscript(text)
-        transcript = text.isEmpty
-            ? NSLocalizedString("error.transcription.emptyResult", comment: "")
-            : text
-        hasValidTranscript = !text.isEmpty
+        // Keep transcript empty on failure so the overlay doesn't treat the error
+        // string as a successful result (green checkmark).
+        transcript = text
         isTranscribing = false
 
         #if DEBUG
-        print("✅ Transcript (\(text.count) chars): \(text.prefix(120))")
+        if text.isEmpty {
+            print("⚠️ Empty transcript")
+        } else {
+            print("✅ Transcript (\(text.count) chars): \(text.prefix(120))")
+        }
         #endif
         return text
     }
@@ -136,8 +135,9 @@ final class TranscriptionService: ObservableObject {
         for j in ["<|startoftranscript|>", "<|endoftext|>", "<|notimestamps|>", "[BLANK_AUDIO]", "(blank)"] {
             text = text.replacingOccurrences(of: j, with: "", options: .caseInsensitive)
         }
-        while text.contains("  ") { text = text.replacingOccurrences(of: "  ", with: " ") }
-        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
         let letters = text.unicodeScalars.filter {
             CharacterSet.alphanumerics.contains($0) || (0x4E00...0x9FFF).contains($0.value)
         }

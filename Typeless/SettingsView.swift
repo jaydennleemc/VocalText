@@ -37,7 +37,6 @@ private enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
 
 struct SettingsView: View {
     @EnvironmentObject var audioTranscriber: AudioTranscriber
-    @Binding var isPresented: Bool
 
     @State private var page: SettingsPage = .general
     @State private var selectedModel = "medium"
@@ -52,7 +51,6 @@ struct SettingsView: View {
     @State private var showResetConfirmation = false
     @State private var didCopyPath = false
 
-    /// tiny / base removed — keep small as default floor.
     private let models: [(id: String, size: String, detailKey: String)] = [
         ("small", "~480 MB", "settings.model.small.description"),
         ("medium", "~1.5 GB", "settings.model.medium.description"),
@@ -82,17 +80,10 @@ struct SettingsView: View {
         ]
     }
 
-    init(isPresented: Binding<Bool>) {
-        self._isPresented = isPresented
-        if let m = UserDefaults.standard.string(forKey: "SelectedModel")?.lowercased() {
-            // Drop retired tiny/base; prefer medium for accuracy when migrating.
-            let normalized: String
-            switch m {
-            case "tiny", "base", "small": normalized = "medium"
-            default: normalized = m
-            }
-            _selectedModel = State(initialValue: normalized)
-        }
+    init() {
+        let raw = UserDefaults.standard.string(forKey: "SelectedModel")?.lowercased() ?? "medium"
+        let model = ["small", "medium", "large-v3"].contains(raw) ? raw : "medium"
+        _selectedModel = State(initialValue: model)
         _selectedDeviceIndex = State(initialValue: UserDefaults.standard.integer(forKey: "SelectedDeviceIndex"))
         if let l = UserDefaults.standard.string(forKey: "SelectedLanguage") {
             _selectedLanguage = State(initialValue: l)
@@ -101,7 +92,6 @@ struct SettingsView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Compact fixed sidebar (no collapsible chrome)
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(SettingsPage.allCases) { item in
                     sidebarButton(item)
@@ -115,7 +105,6 @@ struct SettingsView: View {
 
             Divider()
 
-            // Detail
             Group {
                 switch page {
                 case .general: generalPage
@@ -127,7 +116,11 @@ struct SettingsView: View {
         }
         .frame(width: 520, height: 400)
         .onAppear {
-            migrateModelIfNeeded()
+            // Persist clamp if UserDefaults still holds a retired model name.
+            if let saved = UserDefaults.standard.string(forKey: "SelectedModel")?.lowercased(),
+               !allowedModels.contains(saved) {
+                applyModel("medium")
+            }
             checkAccessibilityPermission()
             audioTranscriber.getAvailableAudioDevices()
         }
@@ -137,9 +130,6 @@ struct SettingsView: View {
             } else {
                 checkAccessibilityPermission()
             }
-        }
-        .onReceive(Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()) { _ in
-            checkAccessibilityPermission()
         }
         .onChange(of: selectedModel) { applyModel($0) }
         .onChange(of: selectedLanguage) { applyLanguage($0) }
@@ -277,7 +267,7 @@ struct SettingsView: View {
             if audioTranscriber.isDownloading {
                 Section {
                     ProgressView(value: audioTranscriber.downloadProgress) {
-                        Text(audioTranscriber.downloadStatus)
+                        Text(audioTranscriber.bootStatus)
                             .font(.caption2)
                     }
                     .controlSize(.small)
@@ -387,18 +377,7 @@ struct SettingsView: View {
     // MARK: - Helpers
 
     private var shortcutDisplay: String {
-        let parts = shortcutString.lowercased().components(separatedBy: "+")
-        var display = ""
-        for part in parts {
-            switch part {
-            case "cmd", "command": display += "⌘"
-            case "option", "opt": display += "⌥"
-            case "control", "ctrl": display += "⌃"
-            case "shift": display += "⇧"
-            default: display += part.uppercased()
-            }
-        }
-        return display.isEmpty ? "⌘⇧D" : display
+        ShortcutFormatting.display(shortcutString)
     }
 
     private func startRecordingShortcut() {
@@ -428,26 +407,6 @@ struct SettingsView: View {
                 }
             }
             return nil
-        }
-    }
-
-    private func migrateModelIfNeeded() {
-        let m = selectedModel.lowercased()
-        if !allowedModels.contains(m) || m == "small" {
-            // One-time nudge toward medium for better accuracy (unless user already picked large).
-            let saved = UserDefaults.standard.string(forKey: "SelectedModel")?.lowercased()
-            if saved == nil || saved == "tiny" || saved == "base" || saved == "small" {
-                if UserDefaults.standard.object(forKey: "DidMigrateToMediumModel") == nil {
-                    selectedModel = "medium"
-                    applyModel("medium")
-                    UserDefaults.standard.set(true, forKey: "DidMigrateToMediumModel")
-                    return
-                }
-            }
-            if !allowedModels.contains(m) {
-                selectedModel = "medium"
-                applyModel("medium")
-            }
         }
     }
 
@@ -494,7 +453,26 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Shared shortcut display
+
+enum ShortcutFormatting {
+    static func display(_ shortcut: String) -> String {
+        let parts = shortcut.lowercased().components(separatedBy: "+")
+        var display = ""
+        for part in parts {
+            switch part {
+            case "cmd", "command": display += "⌘"
+            case "option", "opt": display += "⌥"
+            case "control", "ctrl": display += "⌃"
+            case "shift": display += "⇧"
+            default: display += part.uppercased()
+            }
+        }
+        return display.isEmpty ? "⌘⇧D" : display
+    }
+}
+
 #Preview {
-    SettingsView(isPresented: .constant(true))
+    SettingsView()
         .environmentObject(AudioTranscriber.shared)
 }

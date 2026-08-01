@@ -8,8 +8,6 @@ import WhisperKit
 final class ModelManager: ObservableObject {
     @Published var isDownloading = false
     @Published var downloadProgress: Double = 0.0
-    @Published var downloadStatus = ""
-    @Published var isModelDownloaded = false
     @Published var isModelReady = false
     @Published var bootStatus = "Starting…"
     @Published var lastLoadError: String?
@@ -49,10 +47,7 @@ final class ModelManager: ObservableObject {
     }
 
     func checkAndDownloadModelIfNeeded() async -> Bool {
-        if isModelAlreadyDownloaded() {
-            isModelDownloaded = true
-            return true
-        }
+        if isModelAlreadyDownloaded() { return true }
 
         do {
             isDownloading = true
@@ -75,19 +70,13 @@ final class ModelManager: ObservableObject {
             )
 
             isDownloading = false
-            isModelDownloaded = true
             bootStatus = "Download complete"
             return true
         } catch {
             isDownloading = false
-            isModelDownloaded = false
             isModelReady = false
             bootStatus = "Download failed"
             lastLoadError = error.localizedDescription
-            NotificationCenter.default.post(
-                name: .modelErrorOccurred,
-                object: TypelessError.modelDownloadFailed(reason: error.localizedDescription)
-            )
             return false
         }
     }
@@ -95,9 +84,7 @@ final class ModelManager: ObservableObject {
     func prepareModelAtLaunch() async {
         bootStatus = "Checking model…"
         lastLoadError = nil
-        if isModelAlreadyDownloaded() {
-            isModelDownloaded = true
-        } else {
+        if !isModelAlreadyDownloaded() {
             guard await checkAndDownloadModelIfNeeded() else { return }
         }
         bootStatus = "Loading \(currentModel)…"
@@ -118,9 +105,7 @@ final class ModelManager: ObservableObject {
 
         let folder = localModelFolderIfPresent()
 
-        // Simple, reliable configs — avoid exotic compute options that crash on some Macs.
         let attempts: [WhisperKitConfig] = [
-            // Local folder if we have it
             WhisperKitConfig(
                 model: currentModel,
                 modelFolder: folder,
@@ -130,7 +115,6 @@ final class ModelManager: ObservableObject {
                 load: true,
                 download: folder == nil
             ),
-            // Let WhisperKit resolve + download
             WhisperKitConfig(
                 model: currentModel,
                 verbose: false,
@@ -168,10 +152,6 @@ final class ModelManager: ObservableObject {
         isModelReady = false
         bootStatus = "Load failed"
         lastLoadError = lastError?.localizedDescription ?? "Unknown"
-        NotificationCenter.default.post(
-            name: .modelErrorOccurred,
-            object: TypelessError.modelLoadFailed(reason: lastLoadError ?? "Load failed")
-        )
     }
 
     func ensureWhisperKit() async -> WhisperKit? {
@@ -182,8 +162,6 @@ final class ModelManager: ObservableObject {
         await preloadWhisperKit()
         return whisperKit
     }
-
-    func getWhisperKit() -> WhisperKit? { whisperKit }
 
     private func localModelFolderIfPresent() -> String? {
         let path = getModelPath(for: currentModel)

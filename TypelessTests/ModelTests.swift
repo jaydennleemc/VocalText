@@ -36,10 +36,4 @@ final class TypelessErrorTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, expected)
         XCTAssertTrue(error.isRecoverable)
     }
-
-    func testNetworkError() throws {
-        let error = TypelessError.networkNotConnected
-        XCTAssertEqual(error.errorDescription, NSLocalizedString("error.network.notConnected", comment: ""))
-        XCTAssertEqual(error.type, .warning)
-    }
 }

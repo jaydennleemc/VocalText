@@ -65,16 +65,29 @@ final class KeyboardShortcutManager {
         #endif
     }
 
-    func forceBeginDictateFlag() {
+    // MARK: - Session (single state machine)
+
+    /// Menu toggle start — marks session active so Carbon won't double-start.
+    /// No hold-poll (user stops via menu).
+    func beginMenuSession() {
+        guard !isQuickRecordInProgress else { return }
         isQuickRecordInProgress = true
         dictateStartedAt = Date()
-        startHoldPolling()
+        releasedPollCount = 0
     }
 
-    func forceEndDictateFlag() {
-        stopHoldPolling()
+    /// Clear session flags / hold-poll. Does not stop audio (caller does).
+    func endSession() {
         isQuickRecordInProgress = false
         dictateStartedAt = nil
+        stopHoldPolling()
+    }
+
+    private func beginHoldSession() {
+        isQuickRecordInProgress = true
+        dictateStartedAt = Date()
+        releasedPollCount = 0
+        startHoldPolling()
     }
 
     private func uninstallHotKeyOnly() {
@@ -130,23 +143,16 @@ final class KeyboardShortcutManager {
 
     fileprivate func carbonHotKeyPressed() {
         guard isEnabled else { return }
-        // Second press while already dictating → ignore (hold mode, not toggle).
+        // Second press / menu session already active → hold mode, not toggle.
         guard !isQuickRecordInProgress else { return }
-
-        isQuickRecordInProgress = true
-        dictateStartedAt = Date()
-        releasedPollCount = 0
 
         #if DEBUG
         print("⌨️ Dictate START (hold)")
         #endif
 
+        beginHoldSession()
         Task { @MainActor in
             self.menuBarController?.startQuickRecord()
-        }
-        // Poll physical keys so hold works even when Carbon swallows key-up.
-        DispatchQueue.main.async { [weak self] in
-            self?.startHoldPolling()
         }
     }
 
@@ -221,9 +227,7 @@ final class KeyboardShortcutManager {
 
     private func endDictate() {
         guard isQuickRecordInProgress else { return }
-        isQuickRecordInProgress = false
-        dictateStartedAt = nil
-        stopHoldPolling()
+        endSession()
         Task { @MainActor in
             self.menuBarController?.stopQuickRecord()
         }

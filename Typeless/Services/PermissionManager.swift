@@ -5,76 +5,34 @@ import AppKit
 // MARK: - Permission Manager
 
 @MainActor
-final class PermissionManager: ObservableObject {
-    @Published var hasMicrophonePermission = false
-    @Published var isCheckingPermission = true
-    @Published var hasRequestedPermission = false
-
-    init() {
-        // Synchronous snapshot so we don't block recording waiting on async prompt state.
-        refreshStatus()
-    }
-
-    func refreshStatus() {
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        hasMicrophonePermission = (status == .authorized)
-        isCheckingPermission = (status == .notDetermined)
-    }
-
+final class PermissionManager {
+    /// Warm mic permission at launch (non-blocking). Prompts only if not determined.
     func checkMicrophonePermission() {
-        refreshStatus()
-        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
-            requestPermission(showAlertOnDeny: false)
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        if status == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .audio) { _ in }
         }
-    }
-
-    func requestMicrophonePermission() {
-        requestPermission(showAlertOnDeny: true)
     }
 
     /// Awaitable grant for dictate start path.
     func ensurePermission() async -> Bool {
-        refreshStatus()
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
         switch status {
         case .authorized:
-            hasMicrophonePermission = true
-            isCheckingPermission = false
             return true
         case .denied, .restricted:
-            hasMicrophonePermission = false
-            isCheckingPermission = false
             showMicrophoneSettingsAlert()
             return false
         case .notDetermined:
-            hasRequestedPermission = true
-            isCheckingPermission = true
             let granted = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
                 AVCaptureDevice.requestAccess(for: .audio) { ok in
                     cont.resume(returning: ok)
                 }
             }
-            hasMicrophonePermission = granted
-            isCheckingPermission = false
             if !granted { showMicrophoneSettingsAlert() }
             return granted
         @unknown default:
             return false
-        }
-    }
-
-    private func requestPermission(showAlertOnDeny: Bool) {
-        hasRequestedPermission = true
-        isCheckingPermission = true
-        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-            Task { @MainActor in
-                guard let self else { return }
-                self.hasMicrophonePermission = granted
-                self.isCheckingPermission = false
-                if !granted && showAlertOnDeny {
-                    self.showMicrophoneSettingsAlert()
-                }
-            }
         }
     }
 
