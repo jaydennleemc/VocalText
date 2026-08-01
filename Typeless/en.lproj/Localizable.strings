@@ -76,6 +76,7 @@
 
 /* Settings */
 "settings.view.title" = "Settings";
+"settings.howto.title" = "How to dictate";
 "settings.view.model.selection.label" = "Model Selection";
 "settings.view.model.downloaded.status" = "(Downloaded)";
 "settings.view.model.download.required.status" = "(Download required)";
@@ -101,6 +102,7 @@
 
 /* Language Names for Transcription */
 "language.zh" = "中文";
+"language.yue" = "Cantonese";
 "language.en" = "English";
 "language.ja" = "日本語";
 "language.ko" = "한국어";
@@ -139,20 +141,23 @@
 "settings.reset.confirmation.message" = "This will reset all settings to their default values. This action cannot be undone.";
 "settings.reset.confirmation.reset" = "Reset";
 
-/* Quick Record Shortcut */
-"settings.view.quick.record.shortcut.label" = "Quick Record Shortcut";
-"settings.view.quick.record.shortcut.subtitle" = "Press a keyboard shortcut to start recording";
-"settings.view.quick.record.shortcut.enable" = "Enable quick record";
+/* Dictate Shortcut */
+"settings.view.quick.record.shortcut.label" = "Dictate Shortcut";
+"settings.view.quick.record.shortcut.subtitle" = "Hold to speak in any app, release to insert text";
+"settings.view.quick.record.shortcut.enable" = "Enable dictate shortcut";
 "settings.view.quick.record.shortcut.record" = "Record Shortcut";
 "settings.view.quick.record.shortcut.recording" = "Press your shortcut...";
 "settings.view.quick.record.shortcut.modifier" = "Modifier";
 "settings.view.quick.record.shortcut.key" = "Key";
 "settings.view.quick.record.shortcut.current" = "Current:";
 
+/* Quick-dictate overlay */
+"overlay.transcribing" = "Transcribing…";
+
 /* Accessibility Permission */
 "settings.view.accessibility.permission.label" = "Accessibility Permission Required";
-"settings.view.accessibility.permission.subtitle" = "For global keyboard shortcuts";
-"settings.view.accessibility.permission.description" = "Quick Record shortcut requires Accessibility permission to detect global keyboard events. Grant permission in System Settings to enable this feature.";
+"settings.view.accessibility.permission.subtitle" = "For global shortcuts and paste";
+"settings.view.accessibility.permission.description" = "Dictate needs Accessibility permission to hear the global shortcut and paste text into other apps. Grant it in System Settings.";
 "settings.view.accessibility.permission.open.settings" = "Open Settings";
 "settings.view.accessibility.permission.check.again" = "Check Again";
 

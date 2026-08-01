@@ -1,357 +1,319 @@
-# Typeless - AI Agent Instructions
+# Typeless — AI Agent Instructions
 
-You are an AI coding assistant helping with **Typeless**, a macOS menu bar app for real-time voice-to-text transcription using WhisperKit.
+You are an AI coding assistant working on **Typeless**, a privacy-first macOS menu bar app for on-device voice-to-text transcription via WhisperKit.
 
-## Project Overview
+> `CLAUDE.md` and `QWEN.md` are symlinks to this file. Edit only `AGENTS.md`.
 
-- **Name**: Typeless (also referenced as VocalText in some files)
-- **Platform**: macOS 15.5+
-- **Language**: Swift 5.9+
-- **UI Framework**: SwiftUI + AppKit (menu bar)
-- **Architecture**: MVVM with `@MainActor` for UI consistency
-- **Key Dependencies**: WhisperKit, AVFoundation, CoreAudio
+---
 
-## Tech Stack
+## Project Snapshot
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Language** | Swift 5.9+ | Primary programming language |
-| **UI Framework** | SwiftUI + AppKit | Modern declarative UI with macOS menu bar integration |
-| **Concurrency** | Swift async/await + @MainActor | Asynchronous operations with thread safety |
-| **Audio Recording** | AVFoundation (AVAudioEngine) | Low-level audio capture and processing |
-| **Audio Devices** | CoreAudio | Hardware audio device enumeration and selection |
-| **ML Inference** | WhisperKit (argmaxinc) | On-device speech-to-text transcription |
-| **Model Format** | Core ML (.mlmodelc) | Apple-optimized ML model format |
-| **Persistence** | UserDefaults | User preferences and settings storage |
-| **Localization** | String Catalogs (.strings) | Multi-language support (en, zh-Hans, zh-Hant) |
-| **Permissions** | App Sandbox + Entitlements | Secure macOS app containerization |
-| **Notifications** | NotificationCenter | Cross-component communication |
-| **Build System** | Xcode 15+ | IDE and build toolchain |
+| | |
+|---|---|
+| **Product** | Typeless (legacy name “VocalText” may appear in file headers) |
+| **Platform** | macOS 15.5+ |
+| **Language** | Swift 5 |
+| **UI** | SwiftUI + AppKit (menu bar + `NSPopover`) |
+| **Architecture** | MVVM + service layer; `@MainActor` for UI-facing types |
+| **ML** | WhisperKit (SPM, `argmaxinc/WhisperKit`) → Core ML |
+| **Persistence** | UserDefaults |
+| **i18n** | `Localizable.strings` — `en`, `zh-Hans`, `zh-Hant` |
+| **Bundle ID** | `com.jaydenlee.Typeless` |
+| **Sandbox** | Yes — audio input, network client (model download), user-selected files RO |
 
-### Dependencies
+**Privacy rule:** transcription is on-device. Network is only for model download.
 
-```swift
-// Core frameworks
-import SwiftUI      // UI layer
-import AppKit       // macOS-specific UI (NSStatusBar, NSPopover)
-import AVFoundation // Audio recording and processing
-import CoreAudio    // Audio device management
+---
 
-// Third-party
-import WhisperKit   // On-device transcription (Swift Package Manager)
+## Repository Layout
+
 ```
+Typelesss/                          # repo root (note triple-s)
+├── AGENTS.md                       # this file (agent source of truth)
+├── README.md / README_zh-*.md
+├── test-build.sh                   # local xcodebuild Release
+├── Typeless.xcodeproj/
+├── Typeless/                       # app target
+│   ├── TypelessApp.swift           # @main + AppDelegate
+│   ├── MenuBarController.swift     # NSStatusItem + NSPopover + shortcut actions
+│   ├── KeyboardShortcutManager.swift
+│   ├── MainView.swift              # root SwiftUI chrome + navigation shell
+│   ├── SettingsView.swift          # model / device / language / shortcuts
+│   ├── TutorialView.swift
+│   ├── Models/
+│   │   ├── AudioDevice.swift       # AudioDeviceModel
+│   │   └── TypelessError.swift     # TypelessError + ErrorType
+│   ├── ViewModels/
+│   │   └── AudioTranscriber.swift  # coordinator + singleton (nav / errors / quick-record)
+│   ├── Services/
+│   │   ├── AudioRecorder.swift     # AVAudioEngine capture
+│   │   ├── TranscriptionService.swift
+│   │   ├── ModelManager.swift      # download / preload WhisperKit
+│   │   ├── DeviceManager.swift
+│   │   ├── PermissionManager.swift
+│   │   └── TranscriptionOverlayManager.swift  # floating quick-record overlay
+│   ├── Views/                      # presentational components
+│   ├── Extensions/Notifications.swift  # error notifications only
+│   ├── en.lproj/ zh-Hans.lproj/ zh-Hant.lproj/
+│   └── Typeless.entitlements
+└── TypelessTests/
+```
+
+Root `en.lproj` / `zh-*.lproj` are symlinks into `Typeless/`.
+
+---
 
 ## Architecture
 
-### MVVM Pattern
-
-The app follows **MVVM (Model-View-ViewModel)** architecture:
+### Layers
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        View Layer                           │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐ │
-│  │ MainView     │ │ SettingsView │ │ TutorialView         │ │
-│  │ (SwiftUI)    │ │ (SwiftUI)    │ │ (SwiftUI)            │ │
-│  └──────┬───────┘ └──────┬───────┘ └──────────┬───────────┘ │
-└─────────┼────────────────┼────────────────────┼─────────────┘
-          │                │                    │
-          │ @StateObject   │ @EnvironmentObject │
-          │                │                    │
-          ▼                ▼                    ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     ViewModel Layer                         │
-│              (ObservableObject + @MainActor)                │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ AudioTranscriber                                        ││
-│  │ - Recording state management                            ││
-│  │ - Audio processing pipeline                             ││
-│  │ - Model download & management                           ││
-│  │ - Transcription coordination                            ││
-│  └─────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ SystemHealthChecker                                     ││
-│  │ - System requirements validation                        ││
-│  │ - Permission checks                                     ││
-│  └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-          │
-          │ Uses
-          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Service Layer                          │
-│  ┌──────────────────┐  ┌──────────────────────────────────┐ │
-│  │ MenuBarController│  │ KeyboardShortcutManager          │ │
-│  │ - NSStatusItem   │  │ - Global hotkey monitoring       │ │
-│  │ - NSPopover      │  │ - CMD+R, CMD+S, etc.             │ │
-│  └──────────────────┘  └──────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-          │
-          │ Manages
-          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    External Services                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ WhisperKit   │  │ AVAudioEngine│  │ CoreAudio        │   │
-│  │ Transcription│  │ Recording    │  │ Device Enumeration│   │
-│  └──────────────┘  └──────────────┘  └──────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+AppDelegate
+  └─ MenuBarController          # status item, popover; calls AudioTranscriber.shared
+       ├─ KeyboardShortcutManager
+       ├─ TranscriptionOverlayManager
+       └─ MainView (SwiftUI)
+            └─ AudioTranscriber.shared   # @MainActor coordinator
+                 ├─ AudioRecorder
+                 ├─ ModelManager ── WhisperKit
+                 ├─ TranscriptionService
+                 ├─ DeviceManager
+                 └─ PermissionManager
 ```
 
-### Data Flow
+### Roles
+
+| Type | Role |
+|------|------|
+| `AudioTranscriber` | Single coordinator. Owns services, navigation, error banner, quick-record. Forwards service `@Published` via Combine. `static let shared`. |
+| Services | Single-responsibility, mostly `@MainActor` + `ObservableObject`. No UI. |
+| Views | SwiftUI only. Bind to `AudioTranscriber` / `@AppStorage`; no AVFoundation or WhisperKit. |
+| `MenuBarController` | AppKit shell: menu bar, popover lifecycle; direct method calls into `AudioTranscriber.shared`. |
+
+### Primary data flow
 
 ```
-User Action → MainView → AudioTranscriber → AVAudioEngine (Record)
-                                              ↓
-                                           Audio Data
-                                              ↓
-                                    WAV File Creation
-                                              ↓
-                                    WhisperKit.transcribe()
-                                              ↓
-                                    Transcription Result
-                                              ↓
-                                    Published Property Update
-                                              ↓
-                                    SwiftUI View Re-render
+User (button / ⌘R / hold quick-record)
+  → AudioTranscriber.startRecording() / beginQuickRecord()
+  → PermissionManager + DeviceManager gates
+  → AudioRecorder (AVAudioEngine tap → Float32 buffer)
+  → stop → temp WAV via AVAudioFile
+  → ModelManager.getWhisperKit()
+  → TranscriptionService.transcribe(path, whisperKit)
+  → @Published transcript → SwiftUI re-render
+  → (quick record) auto-copy + TranscriptionOverlayManager
 ```
 
-### Key Architectural Decisions
+### Cross-component communication
 
-1. **@MainActor for UI Classes**
-   - All ObservableObjects that update UI are `@MainActor`
-   - Ensures thread-safe UI updates without manual DispatchQueue.main
+1. **Direct calls** — Keyboard shortcuts → `MenuBarController` → `AudioTranscriber.shared` methods. Prefer this over notifications.
+2. **NotificationCenter** — only for service → coordinator errors: `.modelErrorOccurred`, `.transcriptionError` (object: `TypelessError`). Defined in `Extensions/Notifications.swift`.
+3. **Combine** — `AudioTranscriber` binds service publishers with `.assign(to: &$…)`.
 
-2. **Delegate Pattern for Error Handling**
-   - `AudioTranscriberDelegate` protocol for error propagation
-   - Decouples error handling from business logic
+Do **not** reintroduce a parallel AppState, MainViewDelegate, or notification bus for UI actions.
 
-3. **NotificationCenter for Cross-Component Communication**
-   - Loose coupling between MenuBarController and MainView
-   - Enables keyboard shortcuts to trigger view actions
+---
 
-4. **Service-Oriented Design**
-   - `MenuBarController`: Manages app lifecycle and menu bar UI
-   - `KeyboardShortcutManager`: Handles global hotkeys
-   - `SystemHealthChecker`: Validates system requirements
+## Key Features (behavioral)
 
-## Project Structure
+### Menu bar UX
 
-```
-Typeless/
-├── TypelessApp.swift          # App entry point, window-less configuration
-├── MenuBarController.swift    # Menu bar icon and popover management
-├── MainView.swift             # Main transcription UI (400x300 window)
-├── AudioTranscriber.swift     # Core audio recording & transcription logic
-├── SettingsView.swift         # Model, device, and language settings
-├── TutorialView.swift         # Onboarding tutorial flow
-├── KeyboardShortcutManager.swift  # Global keyboard shortcuts (CMD+R, etc.)
-├── SystemHealthChecker.swift  # System requirements validation
-├── Localizable.strings        # i18n (en, zh-Hans, zh-Hant)
-└── Typeless.entitlements      # Sandboxing and permissions
-```
+- `LSUIElement` — no Dock icon.
+- Left-click status item → toggle `NSPopover` (hosting `MainView`).
+- Right-click → context menu (Quit).
+- Window size: **400×340** (tutorial **380** height).
 
-## Development Guidelines
+### Recording modes
 
-### Swift Concurrency
+1. **Popover record** — large mic button in main UI; start/stop; result shown in card; click to copy.
+2. **Quick record** — global hold shortcut (default `cmd+shift+v`, key `QuickRecordShortcutKey`). Shows floating overlay near cursor via `TranscriptionOverlayManager`; auto-copy on success.
 
-- **ALWAYS** use `@MainActor` for UI-updating classes
-- AudioTranscriber is `@MainActor` - all published properties update on main thread
-- Use `Task { @MainActor in }` for async UI updates
-- Use `withCheckedContinuation` for bridging completion handlers to async/await
+### Models (WhisperKit)
 
-### Audio Handling
+| Variant | Approx. size | Notes |
+|---------|--------------|--------|
+| tiny | ~75MB | Default |
+| base | ~150MB | |
+| small | ~480MB | Good accuracy/speed balance |
+| medium | ~1.5GB | Highest quality in app UI |
+| large-v3 | ~3GB | Largest option in settings |
 
-```swift
-// Correct pattern - check permissions before recording
-if !hasMicrophonePermission {
-    requestMicrophonePermission()
-    return
-}
+Storage path: `~/Documents/huggingface/models/argmaxinc/whisperkit-coreml/`
 
-// Use AVAudioEngine for recording
-let inputNode = audioEngine.inputNode
-let inputFormat = inputNode.outputFormat(forBus: 0)
+Lifecycle: `isModelAlreadyDownloaded` (checks required `.mlmodelc` + `Config.json`) → `WhisperKit.download` → `preloadWhisperKit()` → reuse instance.
 
-// Always clean up taps when stopping
-audioEngine.inputNode.removeTap(onBus: 0)
-audioEngine.stop()
-```
+Optional first-launch: `AppDelegate.copyPreDownloadedModelsIfNeeded()` copies bundled models if present.
 
-### Error Handling
+### Global shortcuts (`KeyboardShortcutManager`)
 
-Use the custom `TypelessError` enum for all errors:
+| Shortcut | Action |
+|----------|--------|
+| ⌘R | Toggle recording |
+| ⌥⌘R | Force retry model download |
+| ⌘C | Copy transcript |
+| ⌘S / ⌘, | Open settings |
+| ⌘W | Close popover |
+| ⌘T | Show tutorial |
+| Configurable hold (default ⌘⇧V) | Quick record (keyDown start / keyUp stop) |
 
-```swift
-enum TypelessError: LocalizedError, Equatable {
-    case microphonePermissionDenied
-    case modelDownloadFailed(reason: String)
-    case transcriptionFailed(reason: String)
-    // ... see MainView.swift for full list
-}
-```
+Global monitors need Accessibility permission for some environments; settings UI includes accessibility guidance.
 
-Report errors via delegate pattern:
-```swift
-delegate?.audioTranscriber(self, didEncounterError: .audioDeviceUnavailable)
-```
+---
 
-### Memory Management
+## Development Rules
 
-- Use `[weak self]` in all closures
-- Implement thorough `deinit` cleanup
-- Stop all timers (`Timer.invalidate()`)
-- Remove NotificationCenter observers
-- Clean up temporary files
-- Remove audio engine taps before releasing
+### Concurrency & threading
+
+- UI-facing `ObservableObject`s: `@MainActor`.
+- Audio engine callbacks may leave the main actor — hop back with `Task { @MainActor in … }` for published updates.
+- Use `[weak self]` in closures and Notification observers.
+- Clean up: cancel Combine bags, `Timer.invalidate()`, remove audio taps, remove observers, delete temp WAV files.
+
+### Errors
+
+- Use `TypelessError` (`Models/TypelessError.swift`) for all user-facing failures.
+- Surface via `AudioTranscriber.showError` → `ErrorBanner` in `MainView`.
+- Prefer `TypelessError` properties: `type` (warning/error/info), `isRecoverable`.
 
 ### Localization
 
-- **ALL** user-facing strings use `NSLocalizedString()`
-- Keys follow pattern: `module.element.description`
-- Available languages: English (en), Simplified Chinese (zh-Hans), Traditional Chinese (zh-Hant)
-- See `en.lproj/Localizable.strings` for reference
+- **All** user-visible strings: `NSLocalizedString("key", comment:)`.
+- Key style: `module.element.description` (e.g. `error.audio.permissionDenied`).
+- Update **all three** catalogs under `Typeless/{en,zh-Hans,zh-Hant}.lproj/Localizable.strings`.
 
-### SwiftUI Best Practices
-
-```swift
-// Use @StateObject for view-owned observable objects
-@StateObject private var audioTranscriber = AudioTranscriber()
-
-// Use @EnvironmentObject for shared state
-@EnvironmentObject var audioTranscriber: AudioTranscriber
-
-// Use @AppStorage for UserDefaults-backed settings
-@AppStorage("selectedLanguage") private var uiLanguage: String = "en"
-```
-
-## Menu Bar App Specifics
-
-- App is `LSUIElement` (no dock icon)
-- Uses `NSPopover` for main window
-- Left-click: toggle popover
-- Right-click: context menu
-- Window size: 400x300 points
-
-## Model Management
-
-WhisperKit models are downloaded on-demand:
-- **Tiny**: ~75MB (fastest, lowest accuracy)
-- **Base**: ~150MB
-- **Small**: ~480MB (recommended)
-- **Medium**: ~1.5GB
-- **Large-v3**: Largest, highest accuracy
-
-Models stored in: `~/Documents/huggingface/models/argmaxinc/whisperkit-coreml/`
-
-### Model Lifecycle
-
-1. Check if model exists via `isModelAlreadyDownloaded(model:)`
-2. Download via `WhisperKit.download()` with progress callback
-3. Preload WhisperKit instance to reduce latency
-4. Transcribe with `DecodingOptions(language:)`
-
-## Notification Patterns
-
-Use NotificationCenter for cross-component communication:
+### SwiftUI patterns
 
 ```swift
-// Key notifications
-Notification.Name("RecordingStarted")
-Notification.Name("RecordingStopped")
-Notification.Name("ModelChanged")
-Notification.Name("ModelDownloadRequested")
-Notification.Name("AudioDevicesChanged")
+@StateObject / shared AudioTranscriber.shared for cross-window access
+@EnvironmentObject when injected
+@AppStorage("selectedLanguage") for UI language prefs
 ```
 
-## Code Style
+Navigation: `AudioTranscriber.navigation` → `.main | .settings | .tutorial`.
 
-### Naming
-- Functions: verbs/verb phrases (`startRecording`, `checkMicrophonePermission`)
-- Variables: nouns (`audioTranscriber`, `selectedDeviceIndex`)
-- Boolean properties: starts with `is`/`has` (`isRecording`, `hasMicrophonePermission`)
+### Memory & resources
 
-### Comments
-- Use `// MARK: - ` for section headers
-- Use `// MARK: - Properties`, `// MARK: - Lifecycle`, etc.
-- Chinese comments OK for this project (mixed codebase)
-- DEBUG-only logging wrapped in `#if DEBUG` blocks
+- Cap recording buffer (~100MB in `AudioRecorder`).
+- Always `removeTap` + `stop` engine on stop/failure.
+- Temp files under `FileManager.default.temporaryDirectory` — delete in `defer`.
 
-### Access Control
-- Use `private` for internal helpers
-- Use `fileprivate` sparingly
-- Mark delegate protocols as `weak` to avoid retain cycles
+### Access control & style
 
-## Testing & Debugging
+- `// MARK: -` section headers.
+- Functions: verb phrases; booleans: `is` / `has` prefixes.
+- `private` by default.
+- Mixed EN/ZH comments are OK; DEBUG logs only inside `#if DEBUG`.
+- Prefer small presentational views under `Views/` over growing `MainView` / `SettingsView` further.
+- Keep the stack lean: no parallel state objects, unused design-token catalogs, or pass-through notification buses.
 
-### Debug Features
-Memory monitoring available in DEBUG builds:
-```swift
-#if DEBUG
-startMemoryMonitoring()  // Logs every 5 seconds
-#endif
-```
+---
 
-### Build Configuration
-- Use Xcode project: `Typeless.xcodeproj`
-- Deployment target: macOS 15.5
-- Sandbox enabled with audio-input entitlement
+## Important Files Cheat Sheet
 
-## Security & Privacy
+| Task | Start here |
+|------|------------|
+| Record pipeline | `Services/AudioRecorder.swift`, `ViewModels/AudioTranscriber.swift` |
+| Transcription | `Services/TranscriptionService.swift`, `Services/ModelManager.swift` |
+| Model download/path | `ModelManager.swift` |
+| Devices | `Services/DeviceManager.swift`, `Models/AudioDevice.swift` |
+| Permissions | `Services/PermissionManager.swift` |
+| Menu bar / popover | `MenuBarController.swift` |
+| Shortcuts | `KeyboardShortcutManager.swift` |
+| Floating overlay | `TranscriptionOverlayManager.swift` |
+| Errors | `Models/TypelessError.swift` |
+| Notifications | `Extensions/Notifications.swift` |
+| Tests | `TypelessTests/` |
 
-- All transcription happens **on-device** (privacy-first)
-- No network required after model download
-- Sandboxed with minimal entitlements:
-  - `device.audio-input`
-  - `network.client` (for model download only)
-  - `files.user-selected.read-only`
+---
 
 ## Common Tasks
 
-### Adding a New Language
-1. Add to `languages` array in `SettingsView.swift`
-2. Add localization keys to all `Localizable.strings` files
-3. Update README.md language support list
+### Add a UI language (app chrome)
 
-### Adding a New Keyboard Shortcut
-1. Add to `KeyboardShortcutManager.swift`
-2. Update `handleKeyEvent()` method
-3. Document in README.md
+1. Add keys to all three `Localizable.strings`.
+2. Wire UI language picker in `SettingsView` if needed.
+3. `MenuBarController.updateLocale()` already reacts to UserDefaults.
 
-### Modifying Audio Processing
-- Audio flows: `AVAudioEngine` → `installTap` → `Data` → WAV file → `WhisperKit.transcribe()`
-- Sample rate: typically 44100 Hz or 48000 Hz
-- Format: Float32 PCM converted to Int16 PCM
-- WAV header: 44 bytes (see `createWAVHeader()`)
+### Add a speech language for Whisper
 
-## Communication
+1. Add option in `SettingsView` language list.
+2. Persist selection; call `AudioTranscriber.setLanguage` → `TranscriptionService.setLanguage`.
+3. Pass via `DecodingOptions(language:)` (already wired).
 
-- Use backticks for file names: `AudioTranscriber.swift`
-- Use backticks for function names: `startRecording()`
-- Cite code using: ```startLine:endLine:filepath
-- Be concise - provide code examples, not lengthy explanations
+### Add a keyboard shortcut
 
-## Tool Usage
+1. Handle in `KeyboardShortcutManager.handleKeyEvent` (and keyUp if hold-based).
+2. Call a method on `MenuBarController` that hits `AudioTranscriber.shared` (or the overlay).
+3. Document in README if user-facing.
 
-### When Exploring Code
-- Use Grep for searching patterns across files
-- Use Read for examining specific files
-- Use Glob for finding files by pattern
+### Change audio format / WAV path
 
-### When Making Changes
-- Read entire file first to understand context
-- Match existing code style
-- Use Edit tool for precise replacements
-- Verify with `lsp_diagnostics` if available
+1. Capture: `AudioRecorder` (Float32 from engine).
+2. Write: `AudioTranscriber.processAudio` uses `AVAudioFile` for temp WAV.
+3. Sample rate comes from the input format (default fallback 44100 mono).
 
-### When Building
-- Build via Xcode: `⌘+R` or `⌘+B`
-- Use `test-build.sh` for automated builds
-- Check build logs for errors
+### Add a notification
+
+Only if you truly need service → coordinator fan-out. Prefer method calls.
+1. Add `static let …` on `Notification.Name` in `Extensions/Notifications.swift`.
+2. Post with `.name` syntax only.
+
+---
+
+## Build, Test, Debug
+
+```bash
+# Open in Xcode
+open Typeless.xcodeproj
+
+# Scripted Release build (requires full Xcode, not CLT-only)
+./test-build.sh
+
+# Unit tests
+xcodebuild test -project Typeless.xcodeproj -scheme Typeless -destination 'platform=macOS'
+```
+
+- Scheme: **Typeless**
+- Deployment target: **macOS 15.5**
+- Do not commit DerivedData, `.build`, or user xcuserdata.
+
+---
+
+## Security & Entitlements
+
+`Typeless.entitlements`:
+
+- `com.apple.security.app-sandbox`
+- `com.apple.security.device.audio-input`
+- `com.apple.security.network.client` — model download only
+- `com.apple.security.files.user-selected.read-only`
+
+Never expand network/file entitlements without a clear product need. Do not send audio or transcripts off-device.
+
+---
+
+## Agent Workflow
+
+1. **Explore** with Grep/Read; match existing style before editing.
+2. **Prefer surgical edits** over large rewrites of `SettingsView` / `MainView`.
+3. **Respect layers**: Views → ViewModels → Services → system frameworks.
+4. **No new third-party deps** unless agreed; WhisperKit is the only SPM product.
+5. **After behavior changes**, run `./test-build.sh` or Xcode build; run `TypelessTests` when touching models/errors.
+6. **Cite code** as `startLine:endLine:path` when explaining.
+7. Stay concise: concrete diffs and examples over long essays.
+8. **YAGNI**: do not reintroduce AppState, design-token files, or notification buses for single-caller actions.
+
+### Known debt / pitfalls
+
+- `SettingsView.swift` is still large (~700 lines) with local button styles.
+- File headers may still say “VocalText”.
+- `SettingsView` / `KeyboardShortcutManager` share `QuickRecordShortcutKey` + `QuickRecordShortcutEnabled` UserDefaults keys — keep them in sync.
+
+---
 
 ## References
 
-- [WhisperKit Documentation](https://github.com/argmaxinc/WhisperKit)
-- [SwiftUI Documentation](https://developer.apple.com/documentation/swiftui)
-- [AVFoundation Audio](https://developer.apple.com/documentation/avfaudio)
-- [macOS Menu Bar Apps](https://developer.apple.com/documentation/appkit/nsstatusbar)
+- [WhisperKit](https://github.com/argmaxinc/WhisperKit)
+- [SwiftUI](https://developer.apple.com/documentation/swiftui)
+- [AVAudioEngine](https://developer.apple.com/documentation/avfaudio/avaudioengine)
+- [NSStatusBar](https://developer.apple.com/documentation/appkit/nsstatusbar)

@@ -2,12 +2,10 @@
 //  ErrorBannerView.swift
 //  Typeless
 //
-//  Created by LEEJAYMC on 16/9/2025.
-//
 
 import SwiftUI
 
-// MARK: - Error Banner View
+// MARK: - Error Banner
 
 struct ErrorBanner: View {
     let message: String
@@ -15,45 +13,37 @@ struct ErrorBanner: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Image(systemName: type.icon)
-                .font(.system(size: 18))
-                .foregroundColor(type.color)
-                .frame(width: 24, height: 24)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(type.color)
+                .symbolRenderingMode(.hierarchical)
 
             Text(message)
-                .font(.system(size: 14))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary)
                 .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .foregroundColor(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.caption)
-                    .fontWeight(.bold)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
                     .frame(width: 20, height: 20)
-                    .foregroundColor(.secondary)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(PlainButtonStyle())
-            .padding(4)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(Circle())
+            .buttonStyle(.plain)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
-        .background(type.backgroundColor)
-        .cornerRadius(6)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(type.borderColor, lineWidth: 1)
-        )
-        .padding(.horizontal, 8)
-        .transition(
-            .asymmetric(
-                insertion: .move(edge: .top).combined(with: .opacity),
-                removal: .opacity
-            )
-        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.regularMaterial)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(type.color.opacity(0.35), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import WhisperKit
 
 // MARK: - Model Manager
@@ -9,18 +10,24 @@ final class ModelManager: ObservableObject {
     @Published var downloadProgress: Double = 0.0
     @Published var downloadStatus = ""
     @Published var isModelDownloaded = false
+    @Published var isModelReady = false
+    @Published var bootStatus = "Starting…"
+    @Published var lastLoadError: String?
 
-    private var currentModel: String = "tiny"
+    private var currentModel = "medium"
     private var whisperKit: WhisperKit?
     private var isPreloading = false
-
-    // Model storage path
     private let modelBasePath = "huggingface/models/argmaxinc/whisperkit-coreml"
-
-    // MARK: - Model Management
+    private let allowedModels: Set<String> = ["small", "medium", "large-v3"]
 
     func setModel(_ model: String) {
-        currentModel = model.lowercased()
+        var name = model.lowercased()
+        if !allowedModels.contains(name) { name = "medium" }
+        if name != currentModel {
+            whisperKit = nil
+            isModelReady = false
+        }
+        currentModel = name
     }
 
     var modelName: String { currentModel }
@@ -28,20 +35,17 @@ final class ModelManager: ObservableObject {
     func isModelAlreadyDownloaded(model: String? = nil) -> Bool {
         let modelName = (model ?? currentModel).lowercased()
         let modelPath = getModelPath(for: modelName)
-        let fileManager = FileManager.default
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: modelPath) else { return false }
 
-        guard fileManager.fileExists(atPath: modelPath) else { return false }
-
-        // Verify required files exist
-        let requiredFiles = ["AudioEncoder.mlmodelc", "MelSpectrogram.mlmodelc", "TextDecoder.mlmodelc", "Config.json"]
-        for file in requiredFiles {
-            let filePath = "\(modelPath)/\(file)"
-            if !fileManager.fileExists(atPath: filePath) {
-                return false
-            }
+        for dir in ["AudioEncoder.mlmodelc", "MelSpectrogram.mlmodelc", "TextDecoder.mlmodelc"] {
+            var isDir: ObjCBool = false
+            let p = (modelPath as NSString).appendingPathComponent(dir)
+            guard fm.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue else { return false }
         }
-
-        return true
+        let config = (modelPath as NSString).appendingPathComponent("config.json")
+        let configAlt = (modelPath as NSString).appendingPathComponent("Config.json")
+        return fm.fileExists(atPath: config) || fm.fileExists(atPath: configAlt)
     }
 
     func checkAndDownloadModelIfNeeded() async -> Bool {
@@ -52,19 +56,16 @@ final class ModelManager: ObservableObject {
 
         do {
             isDownloading = true
-            downloadStatus = String(format: NSLocalizedString("model.status.checking", comment: "Checking model"), currentModel)
-            downloadProgress = 0.0
-
-            NotificationCenter.default.post(name: .modelDownloadStarted, object: nil)
+            isModelReady = false
+            lastLoadError = nil
+            bootStatus = "Downloading \(currentModel)…"
+            downloadProgress = 0
 
             let progressHandler: (Progress) -> Void = { [weak self] progress in
                 Task { @MainActor in
                     self?.downloadProgress = progress.fractionCompleted
-                    self?.downloadStatus = String(
-                        format: NSLocalizedString("model.status.downloading", comment: "Downloading model"),
-                        self?.currentModel ?? "",
-                        progress.fractionCompleted * 100
-                    )
+                    let pct = Int(progress.fractionCompleted * 100)
+                    self?.bootStatus = "Downloading \(self?.currentModel ?? "")… \(pct)%"
                 }
             }
 
@@ -74,84 +75,123 @@ final class ModelManager: ObservableObject {
             )
 
             isDownloading = false
-            downloadStatus = NSLocalizedString("model.status.downloaded", comment: "Model downloaded successfully")
             isModelDownloaded = true
-
-            NotificationCenter.default.post(name: .modelDownloadFinished, object: nil)
+            bootStatus = "Download complete"
             return true
         } catch {
             isDownloading = false
             isModelDownloaded = false
-
-            let nsError = error as NSError
-            let typelessError: TypelessError
-
-            if nsError.domain == NSURLErrorDomain {
-                switch nsError.code {
-                case NSURLErrorNotConnectedToInternet:
-                    downloadStatus = NSLocalizedString("error.network.notConnected", comment: "No internet connection")
-                    typelessError = .networkNotConnected
-                case NSURLErrorTimedOut:
-                    downloadStatus = NSLocalizedString("error.network.timeout", comment: "Connection timeout")
-                    typelessError = .networkTimeout
-                case NSURLErrorCannotFindHost:
-                    downloadStatus = NSLocalizedString("error.network.serverNotFound", comment: "Server not found")
-                    typelessError = .networkServerNotFound
-                default:
-                    downloadStatus = String(format: NSLocalizedString("error.network.generic", comment: "Network error"), nsError.localizedDescription)
-                    typelessError = .networkGeneric(underlying: nsError)
-                }
-            } else {
-                downloadStatus = String(format: NSLocalizedString("model.status.download.failed", comment: "Model download failed"), nsError.localizedDescription)
-                typelessError = .modelDownloadFailed(reason: nsError.localizedDescription)
-            }
-
-            NotificationCenter.default.post(name: .modelDownloadFinished, object: nil)
-            NotificationCenter.default.post(name: .modelErrorOccurred, object: typelessError)
-
+            isModelReady = false
+            bootStatus = "Download failed"
+            lastLoadError = error.localizedDescription
+            NotificationCenter.default.post(
+                name: .modelErrorOccurred,
+                object: TypelessError.modelDownloadFailed(reason: error.localizedDescription)
+            )
             return false
         }
     }
 
-    // MARK: - WhisperKit Preloading
-
-    func preloadWhisperKit() async {
-        guard !isPreloading && whisperKit == nil else { return }
-
-        isPreloading = true
-
-        do {
-            let config = WhisperKitConfig(model: currentModel)
-            let loaded = try await WhisperKit(config)
-
-            whisperKit = loaded
-            isPreloading = false
-
-            #if DEBUG
-            print("✅ WhisperKit preloaded with model: \(currentModel)")
-            #endif
-        } catch {
-            isPreloading = false
-            #if DEBUG
-            print("❌ WhisperKit preload failed: \(error)")
-            #endif
+    func prepareModelAtLaunch() async {
+        bootStatus = "Checking model…"
+        lastLoadError = nil
+        if isModelAlreadyDownloaded() {
+            isModelDownloaded = true
+        } else {
+            guard await checkAndDownloadModelIfNeeded() else { return }
         }
+        bootStatus = "Loading \(currentModel)…"
+        await preloadWhisperKit()
     }
 
-    func getWhisperKit() -> WhisperKit? {
+    func preloadWhisperKit() async {
+        if whisperKit != nil {
+            isModelReady = true
+            bootStatus = "Ready"
+            return
+        }
+        guard !isPreloading else { return }
+        isPreloading = true
+        isModelReady = false
+        bootStatus = "Loading \(currentModel)…"
+        lastLoadError = nil
+
+        let folder = localModelFolderIfPresent()
+
+        // Simple, reliable configs — avoid exotic compute options that crash on some Macs.
+        let attempts: [WhisperKitConfig] = [
+            // Local folder if we have it
+            WhisperKitConfig(
+                model: currentModel,
+                modelFolder: folder,
+                verbose: false,
+                logLevel: .error,
+                prewarm: false,
+                load: true,
+                download: folder == nil
+            ),
+            // Let WhisperKit resolve + download
+            WhisperKitConfig(
+                model: currentModel,
+                verbose: false,
+                logLevel: .error,
+                prewarm: false,
+                load: true,
+                download: true
+            ),
+        ]
+
+        var lastError: Error?
+        for (i, config) in attempts.enumerated() {
+            do {
+                #if DEBUG
+                print("⏳ Load #\(i) model=\(currentModel) folder=\(folder ?? "nil")")
+                #endif
+                whisperKit = try await WhisperKit(config)
+                isPreloading = false
+                isModelReady = true
+                bootStatus = "Ready"
+                lastLoadError = nil
+                #if DEBUG
+                print("✅ Ready: \(currentModel)")
+                #endif
+                return
+            } catch {
+                lastError = error
+                #if DEBUG
+                print("❌ Load #\(i): \(error)")
+                #endif
+            }
+        }
+
+        isPreloading = false
+        isModelReady = false
+        bootStatus = "Load failed"
+        lastLoadError = lastError?.localizedDescription ?? "Unknown"
+        NotificationCenter.default.post(
+            name: .modelErrorOccurred,
+            object: TypelessError.modelLoadFailed(reason: lastLoadError ?? "Load failed")
+        )
+    }
+
+    func ensureWhisperKit() async -> WhisperKit? {
+        if let whisperKit {
+            isModelReady = true
+            return whisperKit
+        }
+        await preloadWhisperKit()
         return whisperKit
     }
 
-    func resetWhisperKit() {
-        whisperKit = nil
-    }
+    func getWhisperKit() -> WhisperKit? { whisperKit }
 
-    // MARK: - Private Helpers
+    private func localModelFolderIfPresent() -> String? {
+        let path = getModelPath(for: currentModel)
+        return isModelAlreadyDownloaded() ? path : nil
+    }
 
     private func getModelPath(for model: String) -> String {
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
         return "\(documentsPath)/\(modelBasePath)/openai_whisper-\(model)"
     }
 }
-
-// Notification.Name extensions are defined in Extensions/Notifications.swift

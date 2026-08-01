@@ -2,8 +2,6 @@
 //  RecordingButtonView.swift
 //  Typeless
 //
-//  Created by LEEJAYMC on 16/9/2025.
-//
 
 import SwiftUI
 
@@ -15,54 +13,48 @@ struct RecordingButton: View {
     let action: () -> Void
 
     @State private var isPressed = false
-    @State private var pulseScale: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Outer pulse ring when recording
-                if isRecording {
+                if isRecording && !reduceMotion {
                     Circle()
-                        .stroke(Color.red.opacity(0.3), lineWidth: 2)
-                        .frame(width: 72, height: 72)
-                        .scaleEffect(pulseScale)
-                        .opacity(2 - pulseScale)
-                        .onAppear {
-                            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: false)) {
-                                pulseScale = 1.3
-                            }
-                        }
-                        .onDisappear {
-                            pulseScale = 1.0
-                        }
+                        .stroke(Color.red.opacity(0.35), lineWidth: 2)
+                        .frame(width: 74, height: 74)
+                        .scaleEffect(isRecording ? 1.12 : 1.0)
+                        .opacity(isRecording ? 0.55 : 1)
+                        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: isRecording)
                 }
 
-                // Button background with gradient
                 Circle()
-                    .fill(isRecording ? AnyShapeStyle(LinearGradient(colors: [.red, .orange], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)))
-                    .frame(width: 56, height: 56)
+                    .fill(isRecording ? AnyShapeStyle(Color.red.gradient) : AnyShapeStyle(Color.accentColor.gradient))
+                    .frame(width: 58, height: 58)
                     .shadow(
-                        color: (isRecording ? Color.red.opacity(0.3) : Color.accentColor.opacity(0.3)),
-                        radius: isPressed ? 6 : 12,
-                        x: 0,
+                        color: (isRecording ? Color.red : Color.accentColor).opacity(isPressed ? 0.25 : 0.4),
+                        radius: isPressed ? 6 : 14,
                         y: isPressed ? 2 : 6
                     )
 
-                // Icon
                 Image(systemName: isRecording ? "stop.fill" : "mic.fill")
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
+                    .contentTransition(.symbolEffect(.replace))
             }
+            .frame(width: 74, height: 74)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
         .disabled(isDisabled)
-        .opacity(isDisabled ? 0.4 : 1.0)
-        .scaleEffect(isPressed ? 0.92 : 1.0)
-        .animation(.easeInOut(duration: 0.1), value: isPressed)
+        .opacity(isDisabled ? 0.4 : 1)
+        .scaleEffect(isPressed ? 0.94 : 1)
+        .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isPressed)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isRecording)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
+        .help(isRecording ? "Stop recording" : "Start recording")
+        .accessibilityLabel(isRecording ? "Stop recording" : "Start recording")
     }
 }

@@ -2,8 +2,6 @@
 //  TranscriptionCardView.swift
 //  Typeless
 //
-//  Created by LEEJAYMC on 16/9/2025.
-//
 
 import SwiftUI
 
@@ -14,64 +12,67 @@ struct TranscriptionCard: View {
     let isEmpty: Bool
     let onCopy: () -> Void
 
-    @State private var showCopiedIndicator = false
+    @State private var showCopied = false
+
+    private var displayText: String {
+        isEmpty
+            ? NSLocalizedString("recording.state.ready", comment: "Ready to record")
+            : text
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                Text(isEmpty ? NSLocalizedString("recording.state.ready", comment: "Ready to record") : text)
+                Text(displayText)
                     .font(.system(size: 14))
-                    .lineSpacing(4)
-                    .foregroundColor(isEmpty ? .secondary : .primary)
+                    .lineSpacing(5)
+                    .foregroundStyle(isEmpty ? .secondary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
+                    .textSelection(.enabled)
+                    .padding(14)
             }
-            .frame(maxHeight: 120)
+            .frame(maxHeight: 160)
 
-            Divider().overlay(Color(nsColor: .separatorColor))
+            if !isEmpty {
+                Divider().opacity(0.4)
 
-            // Footer with copy button
-            HStack {
-                Spacer()
-
-                if showCopiedIndicator {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10))
-                        Text("Copied")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(.green)
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
-                } else if !isEmpty {
-                    Button(action: {
-                        onCopy()
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showCopiedIndicator = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showCopiedIndicator = false
+                HStack {
+                    Spacer()
+                    if showCopied {
+                        Label("Copied", systemImage: "checkmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.green)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    } else {
+                        Button {
+                            onCopy()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                showCopied = true
                             }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    showCopied = false
+                                }
+                            }
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.system(size: 12, weight: .medium))
                         }
-                    }) {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
+                        .buttonStyle(.borderless)
+                        .help(NSLocalizedString("main.view.copy.tooltip", comment: "Copy to clipboard"))
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .help(NSLocalizedString("main.view.copy.tooltip", comment: "Copy to clipboard"))
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
         }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.quaternary.opacity(0.35))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.separator.opacity(0.45), lineWidth: 1)
+        }
     }
 }

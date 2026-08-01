@@ -1,174 +1,446 @@
 import Foundation
 import AVFoundation
-import Combine
 import Accelerate
+import CoreMedia
+import AudioToolbox
+
+// MARK: - Thread-safe store
+
+private final class PCMBufferStore: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private let maxBytes = 100 * 1024 * 1024
+    private(set) var sampleRate: Double = 48_000
+    private(set) var peak: Float = 0
+
+    var count: Int {
+        lock.lock(); defer { lock.unlock() }
+        return data.count
+    }
+
+    func reset(sampleRate: Double = 48_000) {
+        lock.lock()
+        data = Data()
+        self.sampleRate = sampleRate
+        peak = 0
+        lock.unlock()
+    }
+
+    func append(_ chunk: Data, sampleRate: Double, framePeak: Float) {
+        lock.lock()
+        if sampleRate > 1000 { self.sampleRate = sampleRate }
+        peak = max(peak, framePeak)
+        if data.count + chunk.count <= maxBytes {
+            data.append(chunk)
+        }
+        lock.unlock()
+    }
+
+    func takeAll() -> (data: Data, sampleRate: Double, peak: Float) {
+        lock.lock()
+        let out = data
+        let rate = sampleRate
+        let p = peak
+        data = Data()
+        peak = 0
+        lock.unlock()
+        return (out, rate, p)
+    }
+}
 
 // MARK: - Audio Recorder
 
+/// Microphone capture via AVCaptureSession (native device format — no forced converter).
 @MainActor
-final class AudioRecorder: ObservableObject {
+final class AudioRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
     @Published var volumeLevel: Double = 0.0
     @Published var recordingTime: TimeInterval = 0.0
 
-    private var audioEngine: AVAudioEngine?
-    private var audioFormat: AVAudioFormat?
-    private var audioData = Data()
-    private var audioDataSizeWarning = false
+    private let session = AVCaptureSession()
+    private let audioOutput = AVCaptureAudioDataOutput()
+    private let sampleQueue = DispatchQueue(label: "com.typeless.audio.capture", qos: .userInitiated)
+    private let store = PCMBufferStore()
+
     private var recordingTimer: Timer?
-    private let dataLock = NSLock()
-    
-    // Constants (formerly in AppConstants)
-    private let maxRecordingDataSize = 100 * 1024 * 1024 // 100MB
-    private let bufferSize: UInt32 = 1024
-    private let timerInterval: TimeInterval = 0.1
-    private let minDB = -80.0
-    private let maxDB = -10.0
+    private var startedAt: Date?
 
-    // MARK: - Public Methods
-
-    var recordedData: Data {
-        dataLock.lock()
-        defer { dataLock.unlock() }
-        return audioData
+    var format: AVAudioFormat? {
+        AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: store.sampleRate,
+            channels: 1,
+            interleaved: false
+        )
     }
 
-    var format: AVAudioFormat? { audioFormat }
+    var capturedByteCount: Int { store.count }
 
-    func startRecording() throws {
-        guard !isRecording else { return }
+    // MARK: - Start / Stop
 
-        // Reset data
-        dataLock.lock()
-        audioData = Data()
-        audioDataSizeWarning = false
-        dataLock.unlock()
-        recordingTime = 0.0
+    func startRecording(deviceID: String? = nil) throws {
+        _ = stopInternal(clearData: true, silent: true)
 
-        // Setup audio engine
-        let engine = AVAudioEngine()
-        let inputNode = engine.inputNode
-        let bus: AVAudioNodeBus = 0
-        let inputFormat = inputNode.outputFormat(forBus: bus)
-        audioFormat = inputFormat
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard status == .authorized else {
+            throw TypelessError.microphonePermissionDenied
+        }
+
+        session.beginConfiguration()
+        for input in session.inputs { session.removeInput(input) }
+        for output in session.outputs { session.removeOutput(output) }
+
+        guard let device = Self.resolveDevice(preferredID: deviceID) else {
+            session.commitConfiguration()
+            throw TypelessError.audioDeviceUnavailable
+        }
 
         #if DEBUG
-        print("Audio format: \(inputFormat)")
-        print("Sample rate: \(inputFormat.sampleRate)")
-        print("Channels: \(inputFormat.channelCount)")
+        print("🎙️ Using mic: \(device.localizedName)")
         #endif
 
-        // Install tap to capture audio
-        inputNode.installTap(onBus: bus, bufferSize: bufferSize, format: inputFormat) { [weak self] buffer, _ in
-            guard let self = self else { return }
+        let input = try AVCaptureDeviceInput(device: device)
+        guard session.canAddInput(input) else {
+            session.commitConfiguration()
+            throw TypelessError.audioEngineFailed(reason: "Cannot add mic input")
+        }
+        session.addInput(input)
 
-            let channelCount = Int(buffer.format.channelCount)
-            let frameLength = Int(buffer.frameLength)
-            let volume = self.calculateVolume(from: buffer)
+        // IMPORTANT: do NOT force audioSettings — Bluetooth (AirPods) converters often fail
+        // and produce silence / empty frames. Accept native format and convert ourselves.
+        audioOutput.audioSettings = nil
+        audioOutput.setSampleBufferDelegate(self, queue: sampleQueue)
 
-            Task { @MainActor in
-                self.volumeLevel = volume
-            }
+        guard session.canAddOutput(audioOutput) else {
+            session.commitConfiguration()
+            throw TypelessError.audioEngineFailed(reason: "Cannot add audio output")
+        }
+        session.addOutput(audioOutput)
+        session.commitConfiguration()
 
-            if let bufferData = self.audioBufferToData(buffer, channelCount: channelCount, frameLength: frameLength) {
-                self.dataLock.lock()
-                if self.audioData.count + bufferData.count <= self.maxRecordingDataSize {
-                    self.audioData.append(bufferData)
-                } else if !self.audioDataSizeWarning {
-                    self.audioDataSizeWarning = true
-                    #if DEBUG
-                    print("⚠️ Audio data buffer approaching limit (\(self.maxRecordingDataSize / 1024 / 1024)MB)")
-                    #endif
-                }
-                self.dataLock.unlock()
+        var rate = 48_000.0
+        if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(
+            device.activeFormat.formatDescription
+        )?.pointee, asbd.mSampleRate > 1000 {
+            rate = asbd.mSampleRate
+        }
+        store.reset(sampleRate: rate)
+        recordingTime = 0
+        volumeLevel = 0
+        startedAt = Date()
+
+        let session = self.session
+        sampleQueue.async {
+            if !session.isRunning {
+                session.startRunning()
             }
         }
 
-        // Disconnect main mixer to avoid feedback
-        engine.disconnectNodeInput(engine.mainMixerNode)
-
-        engine.prepare()
-        try engine.start()
-
-        self.audioEngine = engine
         isRecording = true
-
-        // Start recording timer
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: timerInterval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.recordingTime += self?.timerInterval ?? 0
+                guard let self, self.isRecording, let started = self.startedAt else { return }
+                self.recordingTime = Date().timeIntervalSince(started)
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        recordingTimer = timer
 
         #if DEBUG
-        print("🎙️ Recording started")
+        print("🎙️ Capture started (native format) @~\(rate) Hz")
         #endif
     }
 
     func stopRecording() -> (data: Data, format: AVAudioFormat?) {
         guard isRecording else { return (Data(), nil) }
+        return stopInternal(clearData: false, silent: false)
+    }
 
+    @discardableResult
+    private func stopInternal(clearData: Bool, silent: Bool) -> (data: Data, format: AVAudioFormat?) {
+        let wasRecording = isRecording
         isRecording = false
-        recordingTime = 0.0
-
-        // Stop timer
         recordingTimer?.invalidate()
         recordingTimer = nil
+        let duration = startedAt.map { Date().timeIntervalSince($0) } ?? 0
+        startedAt = nil
 
-        // Stop engine first, then capture final data under lock
-        if let engine = audioEngine {
-            if engine.isRunning {
-                engine.stop()
-            }
-            engine.inputNode.removeTap(onBus: 0)
+        if session.isRunning {
+            let session = self.session
+            sampleQueue.sync { session.stopRunning() }
         }
-        audioEngine = nil
+        audioOutput.setSampleBufferDelegate(nil, queue: nil)
 
-        // Capture data synchronously after engine is stopped
-        dataLock.lock()
-        let capturedData = audioData
-        let capturedFormat = audioFormat
-        audioData = Data()
-        dataLock.unlock()
+        let taken = store.takeAll()
+        volumeLevel = 0
+        recordingTime = 0
+
+        if clearData {
+            store.reset()
+        }
+
+        let fmt = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: taken.sampleRate > 1000 ? taken.sampleRate : 48_000,
+            channels: 1,
+            interleaved: false
+        )
 
         #if DEBUG
-        print("⏹️ Recording stopped, data size: \(capturedData.count) bytes")
+        if !silent || wasRecording {
+            print("⏹️ Stop: \(taken.data.count) bytes, peak=\(String(format: "%.4f", taken.peak)), t=\(String(format: "%.2f", duration))s, rate=\(taken.sampleRate)")
+        }
         #endif
 
-        return (capturedData, capturedFormat)
+        return (taken.data, fmt)
     }
 
-    // MARK: - Volume Calculation (using vDSP)
+    private static func resolveDevice(preferredID: String?) -> AVCaptureDevice? {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.microphone, .external],
+            mediaType: .audio,
+            position: .unspecified
+        )
+        let devices = discovery.devices
+        if let preferredID, let match = devices.first(where: { $0.uniqueID == preferredID }) {
+            return match
+        }
+        // Prefer built-in over Bluetooth when no preference (more reliable for speech).
+        if let builtIn = devices.first(where: {
+            $0.localizedName.localizedCaseInsensitiveContains("built-in")
+                || $0.localizedName.localizedCaseInsensitiveContains("内建")
+                || $0.localizedName.localizedCaseInsensitiveContains("MacBook")
+        }) {
+            return builtIn
+        }
+        return devices.first ?? AVCaptureDevice.default(for: .audio)
+    }
+}
 
-    private func calculateVolume(from buffer: AVAudioPCMBuffer) -> Double {
-        guard let channelData = buffer.floatChannelData else { return 0.0 }
-        let frameLength = Int(buffer.frameLength)
-        guard frameLength > 0 else { return 0.0 }
+// MARK: - Sample buffers
 
-        let data = channelData[0]
-        var rms: Float = 0.0
-        
-        // Use vDSP for efficient RMS calculation
-        vDSP_rmsqv(data, 1, &rms, vDSP_Length(frameLength))
-        
-        let db = 20 * log10(Double(rms))
-        var level = (db - minDB) / (maxDB - minDB)
-        level = max(0.0, min(1.0, level))
+extension AudioRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
+    nonisolated func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else {
+            return
+        }
+        let asbd = asbdPtr.pointee
+        let channels = max(1, Int(asbd.mChannelsPerFrame))
+        let rate = asbd.mSampleRate > 1000 ? asbd.mSampleRate : 48_000
 
-        // Enhance sensitivity
-        level = level * level * 2.0
-        level = min(1.0, level)
+        // Preferred: AudioBufferList (handles non-interleaved correctly).
+        var mono: [Float] = []
+        if let floats = Self.floatsFromSampleBuffer(sampleBuffer, asbd: asbd, channels: channels) {
+            mono = floats
+        } else {
+            return
+        }
+        guard !mono.isEmpty else { return }
 
-        return level
+        var peak: Float = 0
+        vDSP_maxmgv(mono, 1, &peak, vDSP_Length(mono.count))
+        var rms: Float = 0
+        vDSP_rmsqv(mono, 1, &rms, vDSP_Length(mono.count))
+        // Linear-ish meter: quieter speech still moves the HUD bars.
+        let rmsNorm = min(1.0, Double(rms) * 8.0)
+        let peakNorm = min(1.0, Double(peak) * 2.2)
+        let display = min(1.0, max(rmsNorm, peakNorm * 0.85))
+
+        let chunk = mono.withUnsafeBufferPointer { Data(buffer: $0) }
+        store.append(chunk, sampleRate: rate, framePeak: peak)
+
+        Task { @MainActor in
+            // Attack fast, release medium — avoids a sluggish waveform.
+            let previous = self.volumeLevel
+            if display >= previous {
+                self.volumeLevel = previous * 0.25 + display * 0.75
+            } else {
+                self.volumeLevel = previous * 0.55 + display * 0.45
+            }
+        }
     }
 
-    // MARK: - Buffer Conversion
+    /// Convert CMSampleBuffer → mono Float32 using AudioBufferList.
+    nonisolated private static func floatsFromSampleBuffer(
+        _ sampleBuffer: CMSampleBuffer,
+        asbd: AudioStreamBasicDescription,
+        channels: Int
+    ) -> [Float]? {
+        var bufferListSizeNeeded = 0
+        var status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: &bufferListSizeNeeded,
+            bufferListOut: nil,
+            bufferListSize: 0,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: nil
+        )
+        // First call may return err when size needed — that's OK.
+        guard bufferListSizeNeeded > 0 || status == noErr else {
+            // Fallback: raw block buffer
+            return floatsFromBlockBuffer(sampleBuffer, asbd: asbd, channels: channels)
+        }
 
-    private func audioBufferToData(_ buffer: AVAudioPCMBuffer, channelCount: Int, frameLength: Int) -> Data? {
-        guard let channelData = buffer.floatChannelData else { return nil }
-        guard frameLength > 0 else { return nil }
+        let raw = UnsafeMutableRawPointer.allocate(
+            byteCount: max(bufferListSizeNeeded, MemoryLayout<AudioBufferList>.size),
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        defer { raw.deallocate() }
+        let audioBufferList = raw.bindMemory(to: AudioBufferList.self, capacity: 1)
 
-        let byteSize = frameLength * MemoryLayout<Float>.size
-        return Data(bytes: channelData[0], count: byteSize)
+        var blockBuffer: CMBlockBuffer?
+        status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: audioBufferList,
+            bufferListSize: bufferListSizeNeeded,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: &blockBuffer
+        )
+        guard status == noErr else {
+            return floatsFromBlockBuffer(sampleBuffer, asbd: asbd, channels: channels)
+        }
+        defer { blockBuffer = nil }
+
+        let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
+        let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+        let bits = Int(asbd.mBitsPerChannel)
+        let isNonInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
+
+        // Determine frame count from first buffer
+        guard let first = abl.first, let mData = first.mData else { return nil }
+        let bytesPerFrame = max(1, Int(asbd.mBytesPerFrame))
+        let frames: Int
+        if isNonInterleaved {
+            frames = Int(first.mDataByteSize) / max(1, bits / 8)
+        } else {
+            frames = Int(first.mDataByteSize) / bytesPerFrame
+        }
+        guard frames > 0 else { return nil }
+
+        var mono = [Float](repeating: 0, count: frames)
+
+        if isFloat && bits == 32 {
+            if isNonInterleaved {
+                // Average planes
+                let planeCount = abl.count
+                for p in 0..<planeCount {
+                    guard let ptr = abl[p].mData?.assumingMemoryBound(to: Float.self) else { continue }
+                    for i in 0..<frames {
+                        mono[i] += ptr[i]
+                    }
+                }
+                if planeCount > 1 {
+                    var scale = 1.0 / Float(planeCount)
+                    vDSP_vsmul(mono, 1, &scale, &mono, 1, vDSP_Length(frames))
+                }
+            } else {
+                let ptr = mData.assumingMemoryBound(to: Float.self)
+                if channels == 1 {
+                    for i in 0..<frames { mono[i] = ptr[i] }
+                } else {
+                    for i in 0..<frames {
+                        var s: Float = 0
+                        for c in 0..<channels { s += ptr[i * channels + c] }
+                        mono[i] = s / Float(channels)
+                    }
+                }
+            }
+        } else if bits == 16 {
+            let scale: Float = 1.0 / Float(Int16.max)
+            if isNonInterleaved {
+                let planeCount = abl.count
+                for p in 0..<planeCount {
+                    guard let ptr = abl[p].mData?.assumingMemoryBound(to: Int16.self) else { continue }
+                    for i in 0..<frames {
+                        mono[i] += Float(ptr[i]) * scale
+                    }
+                }
+                if planeCount > 1 {
+                    var inv = 1.0 / Float(planeCount)
+                    vDSP_vsmul(mono, 1, &inv, &mono, 1, vDSP_Length(frames))
+                }
+            } else {
+                let ptr = mData.assumingMemoryBound(to: Int16.self)
+                if channels == 1 {
+                    for i in 0..<frames { mono[i] = Float(ptr[i]) * scale }
+                } else {
+                    for i in 0..<frames {
+                        var s: Float = 0
+                        for c in 0..<channels { s += Float(ptr[i * channels + c]) * scale }
+                        mono[i] = s / Float(channels)
+                    }
+                }
+            }
+        } else {
+            return nil
+        }
+
+        return mono
+    }
+
+    nonisolated private static func floatsFromBlockBuffer(
+        _ sampleBuffer: CMSampleBuffer,
+        asbd: AudioStreamBasicDescription,
+        channels: Int
+    ) -> [Float]? {
+        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return nil }
+        var length = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        let status = CMBlockBufferGetDataPointer(
+            blockBuffer,
+            atOffset: 0,
+            lengthAtOffsetOut: nil,
+            totalLengthOut: &length,
+            dataPointerOut: &dataPointer
+        )
+        guard status == kCMBlockBufferNoErr, let dataPointer, length > 0 else { return nil }
+
+        let bytesPerFrame = max(1, Int(asbd.mBytesPerFrame))
+        let frameCount = length / bytesPerFrame
+        guard frameCount > 0 else { return nil }
+
+        var mono = [Float](repeating: 0, count: frameCount)
+        let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+        let bits = Int(asbd.mBitsPerChannel)
+
+        if isFloat && bits == 32 {
+            dataPointer.withMemoryRebound(to: Float.self, capacity: frameCount * channels) { ptr in
+                if channels == 1 {
+                    for i in 0..<frameCount { mono[i] = ptr[i] }
+                } else {
+                    for i in 0..<frameCount {
+                        var s: Float = 0
+                        for c in 0..<channels { s += ptr[i * channels + c] }
+                        mono[i] = s / Float(channels)
+                    }
+                }
+            }
+        } else if bits == 16 {
+            dataPointer.withMemoryRebound(to: Int16.self, capacity: frameCount * channels) { ptr in
+                let scale: Float = 1.0 / Float(Int16.max)
+                if channels == 1 {
+                    for i in 0..<frameCount { mono[i] = Float(ptr[i]) * scale }
+                } else {
+                    for i in 0..<frameCount {
+                        var s: Float = 0
+                        for c in 0..<channels { s += Float(ptr[i * channels + c]) * scale }
+                        mono[i] = s / Float(channels)
+                    }
+                }
+            }
+        } else {
+            return nil
+        }
+        return mono
     }
 }

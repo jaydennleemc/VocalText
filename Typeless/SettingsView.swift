@@ -2,111 +2,404 @@
 //  SettingsView.swift
 //  Typeless
 //
-//  Created by LEEJAYMC on 16/9/2025.
+//  Compact macOS Settings–style UI.
+//  Pages: Dictation · Model · General
 //
 
 import SwiftUI
-import ApplicationServices
 import AppKit
 
-// MARK: - Settings Primary Button Style
+// MARK: - Sidebar
 
-struct SettingsPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing)
-            )
-            .foregroundColor(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
+private enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
+    case general, model, dictation
 
-// MARK: - Settings Secondary Button Style
+    var id: String { rawValue }
 
-struct SettingsSecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .foregroundColor(.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .opacity(configuration.isPressed ? 0.7 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Radio Button
-
-struct RadioButton: View {
-    let isSelected: Bool
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(isSelected ? Color.accentColor : Color.secondary, lineWidth: 2)
-                .frame(width: 18, height: 18)
-
-            if isSelected {
-                Circle()
-                    .fill(Color.accentColor)
-                    .frame(width: 10, height: 10)
-                    .transition(.scale.combined(with: .opacity))
-            }
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .model: return "Model"
+        case .dictation: return "Dictation"
         }
-        .animation(.spring(response: 0.2), value: isSelected)
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: return "gearshape"
+        case .model: return "cpu"
+        case .dictation: return "waveform"
+        }
     }
 }
 
-// MARK: - Badge
-
-struct Badge: View {
-    let text: String
-    let color: Color
-
-    init(_ text: String, color: Color = .secondary) {
-        self.text = text
-        self.color = color
-    }
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 9))
-            .foregroundColor(color)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
-
-// MARK: - Settings View
+// MARK: - Settings
 
 struct SettingsView: View {
     @EnvironmentObject var audioTranscriber: AudioTranscriber
     @Binding var isPresented: Bool
-    @State private var selectedModel = "tiny"
+
+    @State private var page: SettingsPage = .general
+    @State private var selectedModel = "medium"
     @State private var selectedDeviceIndex = 0
     @State private var selectedLanguage = "zh"
     @AppStorage("selectedLanguage") private var uiLanguage: String = "en"
-    @State private var showResetConfirmation = false
-    @State private var viewRefreshID = UUID()
-
-    // Accessibility Permission State
-    @AppStorage("AccessibilityPermissionChecked") private var accessibilityPermissionChecked = false
-    @State private var hasAccessibilityPermission = false
-
-    // Quick Record Shortcut Settings
     @AppStorage("QuickRecordShortcutEnabled") private var shortcutEnabled = true
-    @AppStorage("QuickRecordShortcut") private var shortcutString = "cmd+v"
+    @AppStorage("QuickRecordShortcutKey") private var shortcutString = "cmd+shift+d"
     @State private var isRecordingShortcut = false
     @State private var eventMonitor: Any?
+    @State private var hasAccessibilityPermission = AccessibilityAuth.isTrusted
+    @State private var showResetConfirmation = false
+    @State private var didCopyPath = false
+
+    /// tiny / base removed — keep small as default floor.
+    private let models: [(id: String, size: String, detailKey: String)] = [
+        ("small", "~480 MB", "settings.model.small.description"),
+        ("medium", "~1.5 GB", "settings.model.medium.description"),
+        ("large-v3", "~3 GB", "settings.model.large.description"),
+    ]
+
+    private let allowedModels: Set<String> = ["small", "medium", "large-v3"]
+
+    private var languages: [(id: String, name: String)] {
+        [
+            ("zh", NSLocalizedString("language.zh", comment: "Chinese")),
+            ("yue", NSLocalizedString("language.yue", comment: "Cantonese")),
+            ("en", NSLocalizedString("language.en", comment: "English")),
+            ("ja", NSLocalizedString("language.ja", comment: "Japanese")),
+            ("ko", NSLocalizedString("language.ko", comment: "Korean")),
+            ("fr", NSLocalizedString("language.fr", comment: "French")),
+            ("de", NSLocalizedString("language.de", comment: "German")),
+            ("es", NSLocalizedString("language.es", comment: "Spanish")),
+        ]
+    }
+
+    private var uiLanguages: [(id: String, name: String)] {
+        [
+            ("en", NSLocalizedString("ui.language.en", comment: "")),
+            ("zh-Hans", NSLocalizedString("ui.language.zh-Hans", comment: "")),
+            ("zh-Hant", NSLocalizedString("ui.language.zh-Hant", comment: "")),
+        ]
+    }
+
+    init(isPresented: Binding<Bool>) {
+        self._isPresented = isPresented
+        if let m = UserDefaults.standard.string(forKey: "SelectedModel")?.lowercased() {
+            // Drop retired tiny/base; prefer medium for accuracy when migrating.
+            let normalized: String
+            switch m {
+            case "tiny", "base", "small": normalized = "medium"
+            default: normalized = m
+            }
+            _selectedModel = State(initialValue: normalized)
+        }
+        _selectedDeviceIndex = State(initialValue: UserDefaults.standard.integer(forKey: "SelectedDeviceIndex"))
+        if let l = UserDefaults.standard.string(forKey: "SelectedLanguage") {
+            _selectedLanguage = State(initialValue: l)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Compact fixed sidebar (no collapsible chrome)
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(SettingsPage.allCases) { item in
+                    sidebarButton(item)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 8)
+            .frame(width: 128)
+            .background(Color(nsColor: .controlBackgroundColor))
+
+            Divider()
+
+            // Detail
+            Group {
+                switch page {
+                case .general: generalPage
+                case .model: modelPage
+                case .dictation: dictationPage
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(width: 520, height: 400)
+        .onAppear {
+            migrateModelIfNeeded()
+            checkAccessibilityPermission()
+            audioTranscriber.getAvailableAudioDevices()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .accessibilityTrustChanged)) { note in
+            if let trusted = note.object as? Bool {
+                hasAccessibilityPermission = trusted
+            } else {
+                checkAccessibilityPermission()
+            }
+        }
+        .onReceive(Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()) { _ in
+            checkAccessibilityPermission()
+        }
+        .onChange(of: selectedModel) { applyModel($0) }
+        .onChange(of: selectedLanguage) { applyLanguage($0) }
+        .onChange(of: selectedDeviceIndex) { applyDevice($0) }
+        .alert(
+            NSLocalizedString("settings.reset.confirmation.title", comment: ""),
+            isPresented: $showResetConfirmation
+        ) {
+            Button(NSLocalizedString("settings.reset.confirmation.reset", comment: ""), role: .destructive) {
+                resetSettings()
+            }
+            Button(NSLocalizedString("general.cancel.button", comment: ""), role: .cancel) {}
+        } message: {
+            Text(NSLocalizedString("settings.reset.confirmation.message", comment: ""))
+        }
+    }
+
+    private func sidebarButton(_ item: SettingsPage) -> some View {
+        Button {
+            page = item
+        } label: {
+            Label(item.title, systemImage: item.symbol)
+                .labelStyle(.titleAndIcon)
+                .font(.system(size: 12, weight: page == item ? .semibold : .regular))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    page == item
+                        ? Color.accentColor.opacity(0.15)
+                        : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .foregroundStyle(page == item ? Color.accentColor : Color.primary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Dictation
+
+    private var dictationPage: some View {
+        Form {
+            Section {
+                Text("Hold \(shortcutDisplay) · speak · release. Menu → Start Dictating also works.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Shortcut") {
+                Toggle("Enable Shortcut", isOn: $shortcutEnabled)
+                    .controlSize(.small)
+
+                if shortcutEnabled {
+                    LabeledContent("Keys") {
+                        HStack(spacing: 6) {
+                            Text(shortcutDisplay)
+                                .font(.caption.monospaced())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+
+                            Button(isRecordingShortcut ? "…" : "Change") {
+                                startRecordingShortcut()
+                            }
+                            .controlSize(.small)
+                            .disabled(isRecordingShortcut)
+                        }
+                    }
+                }
+            }
+
+            Section("Input") {
+                Picker("Speech", selection: $selectedLanguage) {
+                    ForEach(languages, id: \.id) { item in
+                        Text(item.name).tag(item.id)
+                    }
+                }
+                .controlSize(.small)
+
+                if audioTranscriber.audioDevices.isEmpty {
+                    Text(NSLocalizedString("settings.view.no.audio.device.available.message", comment: ""))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Mic", selection: $selectedDeviceIndex) {
+                        ForEach(Array(audioTranscriber.audioDevices.enumerated()), id: \.element.id) { index, device in
+                            Text(device.name).tag(index)
+                        }
+                    }
+                    .controlSize(.small)
+                }
+
+                Button("Refresh Mics") {
+                    audioTranscriber.getAvailableAudioDevices()
+                }
+                .controlSize(.small)
+            }
+        }
+        .formStyle(.grouped)
+        .controlSize(.small)
+        .padding(8)
+    }
+
+    // MARK: - Model
+
+    private var modelPage: some View {
+        Form {
+            Section {
+                Picker("Model", selection: $selectedModel) {
+                    ForEach(models, id: \.id) { model in
+                        HStack {
+                            Text(model.id)
+                            Spacer(minLength: 6)
+                            Text(model.size)
+                                .foregroundStyle(.secondary)
+                            if audioTranscriber.isModelAlreadyDownloaded(model: model.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(Color.green)
+                                    .imageScale(.small)
+                            }
+                        }
+                        .tag(model.id)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .controlSize(.small)
+            } footer: {
+                if let detail = models.first(where: { $0.id == selectedModel }) {
+                    Text(NSLocalizedString(detail.detailKey, comment: ""))
+                        .font(.caption)
+                }
+            }
+
+            if audioTranscriber.isDownloading {
+                Section {
+                    ProgressView(value: audioTranscriber.downloadProgress) {
+                        Text(audioTranscriber.downloadStatus)
+                            .font(.caption2)
+                    }
+                    .controlSize(.small)
+                }
+            } else if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel) {
+                Section {
+                    Button("Download Model") {
+                        applyModel(selectedModel)
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .controlSize(.small)
+        .padding(8)
+    }
+
+    // MARK: - General
+
+    private var generalPage: some View {
+        Form {
+            Section("Interface") {
+                Picker("Language", selection: $uiLanguage) {
+                    ForEach(uiLanguages, id: \.id) { item in
+                        Text(item.name).tag(item.id)
+                    }
+                }
+                .controlSize(.small)
+            }
+
+            Section {
+                LabeledContent("Accessibility") {
+                    HStack(spacing: 4) {
+                        Image(systemName: hasAccessibilityPermission ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(hasAccessibilityPermission ? Color.green : Color.orange)
+                            .imageScale(.small)
+                        Text(hasAccessibilityPermission ? "On" : "Off")
+                            .font(.caption)
+                            .foregroundStyle(hasAccessibilityPermission ? Color.secondary : Color.orange)
+                    }
+                }
+
+                if !hasAccessibilityPermission {
+                    Text("Needed for global shortcut & paste into other apps.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if AccessibilityAuth.isRunningFromXcodeDerivedData {
+                        Text("Xcode build: enable this DerivedData app, not only /Applications.")
+                            .font(.caption2)
+                            .foregroundStyle(Color.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text(AccessibilityAuth.processPathHint)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+
+                    HStack(spacing: 6) {
+                        Button("System Settings") { AccessibilityAuth.requestAccess() }
+                        Button(didCopyPath ? "Copied" : "Copy Path") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(AccessibilityAuth.processPathHint, forType: .string)
+                            didCopyPath = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { didCopyPath = false }
+                        }
+                        Button("Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([
+                                URL(fileURLWithPath: AccessibilityAuth.processPathHint)
+                            ])
+                        }
+                        Button("Recheck") { checkAccessibilityPermission() }
+                    }
+                    .controlSize(.mini)
+                }
+            } header: {
+                Text("Privacy")
+            } footer: {
+                Text("On-device transcription only.")
+                    .font(.caption2)
+            }
+
+            Section("About") {
+                LabeledContent("Version") {
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+                        .font(.caption)
+                }
+                Link("WhisperKit", destination: URL(string: "https://github.com/argmaxinc/WhisperKit")!)
+                    .font(.caption)
+            }
+
+            Section {
+                Button("Reset Settings…", role: .destructive) {
+                    showResetConfirmation = true
+                }
+                .controlSize(.small)
+            }
+        }
+        .formStyle(.grouped)
+        .controlSize(.small)
+        .padding(8)
+    }
+
+    // MARK: - Helpers
+
+    private var shortcutDisplay: String {
+        let parts = shortcutString.lowercased().components(separatedBy: "+")
+        var display = ""
+        for part in parts {
+            switch part {
+            case "cmd", "command": display += "⌘"
+            case "option", "opt": display += "⌥"
+            case "control", "ctrl": display += "⌃"
+            case "shift": display += "⇧"
+            default: display += part.uppercased()
+            }
+        }
+        return display.isEmpty ? "⌘⇧D" : display
+    }
 
     private func startRecordingShortcut() {
         isRecordingShortcut = true
@@ -114,22 +407,23 @@ struct SettingsView: View {
             if event.keyCode == 53 {
                 DispatchQueue.main.async {
                     isRecordingShortcut = false
+                    if let mon = eventMonitor { NSEvent.removeMonitor(mon) }
                     eventMonitor = nil
                 }
                 return nil
             }
-            var modifierParts: [String] = []
-            if event.modifierFlags.contains(.command) { modifierParts.append("cmd") }
-            if event.modifierFlags.contains(.option) { modifierParts.append("option") }
-            if event.modifierFlags.contains(.control) { modifierParts.append("control") }
-            if event.modifierFlags.contains(.shift) { modifierParts.append("shift") }
-            let keyChar = event.charactersIgnoringModifiers?.lowercased() ?? ""
-            if !modifierParts.isEmpty && !keyChar.isEmpty {
-                modifierParts.append(keyChar)
-                let shortcut = modifierParts.joined(separator: "+")
+            var mods: [String] = []
+            if event.modifierFlags.contains(.command) { mods.append("cmd") }
+            if event.modifierFlags.contains(.option) { mods.append("option") }
+            if event.modifierFlags.contains(.control) { mods.append("control") }
+            if event.modifierFlags.contains(.shift) { mods.append("shift") }
+            let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            if !mods.isEmpty, !key.isEmpty {
+                let shortcut = (mods + [String(key.prefix(1))]).joined(separator: "+")
                 DispatchQueue.main.async {
                     shortcutString = shortcut
                     isRecordingShortcut = false
+                    if let mon = eventMonitor { NSEvent.removeMonitor(mon) }
                     eventMonitor = nil
                 }
             }
@@ -137,571 +431,70 @@ struct SettingsView: View {
         }
     }
 
-    private func openAccessibilitySettings() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(options)
-        if !trusted {
-            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-            NSWorkspace.shared.open(url)
+    private func migrateModelIfNeeded() {
+        let m = selectedModel.lowercased()
+        if !allowedModels.contains(m) || m == "small" {
+            // One-time nudge toward medium for better accuracy (unless user already picked large).
+            let saved = UserDefaults.standard.string(forKey: "SelectedModel")?.lowercased()
+            if saved == nil || saved == "tiny" || saved == "base" || saved == "small" {
+                if UserDefaults.standard.object(forKey: "DidMigrateToMediumModel") == nil {
+                    selectedModel = "medium"
+                    applyModel("medium")
+                    UserDefaults.standard.set(true, forKey: "DidMigrateToMediumModel")
+                    return
+                }
+            }
+            if !allowedModels.contains(m) {
+                selectedModel = "medium"
+                applyModel("medium")
+            }
         }
+    }
+
+    private func applyModel(_ model: String) {
+        var m = model.lowercased()
+        if !allowedModels.contains(m) { m = "medium" }
+        UserDefaults.standard.set(m, forKey: "SelectedModel")
+        audioTranscriber.setModel(m)
+        Task {
+            if !audioTranscriber.isModelAlreadyDownloaded(model: m) {
+                _ = await audioTranscriber.checkAndDownloadModelIfNeeded()
+            }
+            await audioTranscriber.preloadWhisperKit()
+        }
+    }
+
+    private func applyLanguage(_ code: String) {
+        UserDefaults.standard.set(code, forKey: "SelectedLanguage")
+        audioTranscriber.setLanguage(code)
+    }
+
+    private func applyDevice(_ index: Int) {
+        UserDefaults.standard.set(index, forKey: "SelectedDeviceIndex")
+        audioTranscriber.setSelectedDevice(index: index)
     }
 
     private func checkAccessibilityPermission() {
-        hasAccessibilityPermission = AXIsProcessTrusted()
-        accessibilityPermissionChecked = true
-    }
-
-    let models = [
-        ("tiny", "~75MB", "settings.model.tiny.description"),
-        ("base", "~150MB", "settings.model.base.description"),
-        ("small", "~480MB", "settings.model.small.description"),
-        ("medium", "~1.5GB", "settings.model.medium.description"),
-        ("large-v3", "~3GB", "settings.model.large.description")
-    ]
-
-    var languages: [(String, String)] {
-        [
-            ("zh", NSLocalizedString("language.zh", comment: "Chinese")),
-            ("en", NSLocalizedString("language.en", comment: "English")),
-            ("ja", NSLocalizedString("language.ja", comment: "Japanese")),
-            ("ko", NSLocalizedString("language.ko", comment: "Korean")),
-            ("fr", NSLocalizedString("language.fr", comment: "French")),
-            ("de", NSLocalizedString("language.de", comment: "German")),
-            ("es", NSLocalizedString("language.es", comment: "Spanish"))
-        ]
-    }
-
-    var uiLanguages: [(String, String)] {
-        [
-            ("en", NSLocalizedString("ui.language.en", comment: "English UI")),
-            ("zh-Hans", NSLocalizedString("ui.language.zh-Hans", comment: "Simplified Chinese UI")),
-            ("zh-Hant", NSLocalizedString("ui.language.zh-Hant", comment: "Traditional Chinese UI"))
-        ]
-    }
-
-    init(isPresented: Binding<Bool>) {
-        self._isPresented = isPresented
-        if let savedModel = UserDefaults.standard.string(forKey: "SelectedModel") {
-            self._selectedModel = State(initialValue: savedModel)
-        }
-        self._selectedDeviceIndex = State(initialValue: UserDefaults.standard.integer(forKey: "SelectedDeviceIndex"))
-        if let savedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") {
-            self._selectedLanguage = State(initialValue: savedLanguage)
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                HStack(spacing: 8) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(
-                                LinearGradient(
-                                    colors: [.accentColor, .purple],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 22, height: 22)
-                        Image(systemName: "gearshape.2.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    Text(LocalizedStringKey("settings.view.title"))
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
-                }
-                Spacer()
-                Button(action: { isPresented = false }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help(LocalizedStringKey("settings.close.tooltip"))
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-
-            Divider().overlay(Color(nsColor: .separatorColor))
-
-            // Content
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
-                    // Model Selection Card
-                    SettingsCard(
-                        icon: "cpu",
-                        iconColor: .purple,
-                        title: LocalizedStringKey("settings.view.model.selection.label"),
-                        subtitle: LocalizedStringKey("settings.view.model.selection.subtitle")
-                    ) {
-                        VStack(spacing: 8) {
-                            ForEach(models, id: \.0) { model, size, description in
-                                ModelOptionRow(
-                                    name: model.capitalized,
-                                    size: size,
-                                    description: NSLocalizedString(description, comment: ""),
-                                    isSelected: selectedModel == model,
-                                    isDownloaded: audioTranscriber.isModelAlreadyDownloaded(model: model)
-                                ) {
-                                    withAnimation(.spring(response: 0.3)) {
-                                        selectedModel = model
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Audio Device Card
-                    SettingsCard(
-                        icon: "mic",
-                        iconColor: .accentColor,
-                        title: LocalizedStringKey("settings.view.audio.input.device.label"),
-                        subtitle: nil
-                    ) {
-                        if audioTranscriber.audioDevices.isEmpty {
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .foregroundColor(.orange)
-                                Text(LocalizedStringKey("settings.view.no.audio.device.available.message"))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.vertical, 8)
-                        } else {
-                            VStack(spacing: 4) {
-                                ForEach(0..<audioTranscriber.audioDevices.count, id: \.self) { index in
-                                    DeviceOptionRow(
-                                        name: audioTranscriber.audioDevices[index].name,
-                                        isSelected: selectedDeviceIndex == index
-                                    ) {
-                                        withAnimation(.spring(response: 0.3)) {
-                                            selectedDeviceIndex = index
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Transcription Language Card
-                    SettingsCard(
-                        icon: "globe",
-                        iconColor: .green,
-                        title: LocalizedStringKey("settings.view.transcription.language.label"),
-                        subtitle: nil
-                    ) {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                            ForEach(languages, id: \.0) { code, name in
-                                LanguageOptionRow(
-                                    name: name,
-                                    isSelected: selectedLanguage == code
-                                ) {
-                                    withAnimation(.spring(response: 0.3)) {
-                                        selectedLanguage = code
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // UI Language Card
-                    SettingsCard(
-                        icon: "textformat",
-                        iconColor: .orange,
-                        title: LocalizedStringKey("settings.view.app.language.label"),
-                        subtitle: nil
-                    ) {
-                        VStack(spacing: 4) {
-                            ForEach(uiLanguages, id: \.0) { code, name in
-                                LanguageOptionRow(
-                                    name: name,
-                                    isSelected: uiLanguage == code
-                                ) {
-                                    withAnimation(.spring(response: 0.3)) {
-                                        uiLanguage = code
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Quick Record Shortcut Card
-                    SettingsCard(
-                        icon: "keyboard",
-                        iconColor: .red,
-                        title: LocalizedStringKey("settings.view.quick.record.shortcut.label"),
-                        subtitle: LocalizedStringKey("settings.view.quick.record.shortcut.subtitle")
-                    ) {
-                        VStack(spacing: 12) {
-                            HStack {
-                                Text(LocalizedStringKey("settings.view.quick.record.shortcut.enable"))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                Toggle("", isOn: $shortcutEnabled)
-                                    .toggleStyle(SwitchToggleStyle())
-                                    .labelsHidden()
-                                    .tint(.accentColor)
-                            }
-
-                            if shortcutEnabled {
-                                HStack(spacing: 16) {
-                                    Button(action: { startRecordingShortcut() }) {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: isRecordingShortcut ? "record.circle" : "keyboard")
-                                                .font(.system(size: 11))
-                                            Text(isRecordingShortcut ? NSLocalizedString("settings.view.quick.record.shortcut.recording", comment: "Press your shortcut...") : NSLocalizedString("settings.view.quick.record.shortcut.record", comment: "Record Shortcut"))
-                                                .font(.system(size: 13))
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(isRecordingShortcut ? Color.red.opacity(0.15) : Color.accentColor.opacity(0.1))
-                                        .foregroundColor(isRecordingShortcut ? .red : .accentColor)
-                                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                    .disabled(isRecordingShortcut)
-
-                                    Spacer()
-                                }
-
-                                HStack(spacing: 4) {
-                                    Text(LocalizedStringKey("settings.view.quick.record.shortcut.current"))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
-                                    Text(currentShortcutDisplay)
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(.accentColor)
-                                }
-                            }
-                        }
-                    }
-
-                    // Accessibility Permission Warning
-                    if !hasAccessibilityPermission {
-                        AccessibilityPermissionCard(
-                            onOpenSettings: openAccessibilitySettings,
-                            onCheckAgain: checkAccessibilityPermission
-                        )
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-            }
-
-            Divider().overlay(Color(nsColor: .separatorColor))
-
-            // Footer
-            HStack(spacing: 12) {
-                Button(action: { showResetConfirmation = true }) {
-                    Label(LocalizedStringKey("settings.reset.button"), systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 13))
-                }
-                .buttonStyle(SettingsSecondaryButtonStyle())
-                .help(LocalizedStringKey("settings.reset.tooltip"))
-                .alert(isPresented: $showResetConfirmation) {
-                    Alert(
-                        title: Text(LocalizedStringKey("settings.reset.confirmation.title")),
-                        message: Text(LocalizedStringKey("settings.reset.confirmation.message")),
-                        primaryButton: .destructive(Text(LocalizedStringKey("settings.reset.confirmation.reset"))) {
-                            resetSettings()
-                        },
-                        secondaryButton: .cancel(Text(LocalizedStringKey("general.cancel.button")))
-                    )
-                }
-
-                Spacer()
-
-                Button(action: saveSettings) {
-                    Label(LocalizedStringKey("general.save.button"), systemImage: "checkmark")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .buttonStyle(SettingsPrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .frame(width: 400, height: 340)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .onAppear { checkAccessibilityPermission() }
-        .onChange(of: uiLanguage) { viewRefreshID = UUID() }
-        .id(viewRefreshID)
-    }
-
-    private var currentShortcutDisplay: String {
-        let parts = shortcutString.lowercased().components(separatedBy: "+")
-        var display = ""
-        var hasModifier = false
-        for part in parts {
-            switch part {
-            case "cmd": display += "⌘"; hasModifier = true
-            case "option", "opt": display += "⌥"; hasModifier = true
-            case "control", "ctrl": display += "⌃"; hasModifier = true
-            case "shift": display += "⇧"; hasModifier = true
-            default: display += part.uppercased()
-            }
-        }
-        if !hasModifier && parts.count == 1 { return parts[0].uppercased() }
-        return display.isEmpty ? "⌘V" : display
-    }
-
-    private func saveSettings() {
-        UserDefaults.standard.set(selectedModel, forKey: "SelectedModel")
-        UserDefaults.standard.set(selectedDeviceIndex, forKey: "SelectedDeviceIndex")
-        UserDefaults.standard.set(selectedLanguage, forKey: "SelectedLanguage")
-        audioTranscriber.setSelectedDevice(index: selectedDeviceIndex)
-        audioTranscriber.setLanguage(selectedLanguage)
-        if !audioTranscriber.isModelAlreadyDownloaded(model: selectedModel) {
-            NotificationCenter.default.post(name: .modelDownloadRequested, object: selectedModel)
-        } else {
-            NotificationCenter.default.post(name: .modelChanged, object: nil)
-        }
-        isPresented = false
+        hasAccessibilityPermission = AccessibilityAuth.isTrusted
     }
 
     private func resetSettings() {
-        selectedModel = "tiny"
+        selectedModel = "medium"
         selectedDeviceIndex = 0
         selectedLanguage = "zh"
         uiLanguage = "en"
-        UserDefaults.standard.set(selectedModel, forKey: "SelectedModel")
-        UserDefaults.standard.set(selectedDeviceIndex, forKey: "SelectedDeviceIndex")
-        UserDefaults.standard.set(selectedLanguage, forKey: "SelectedLanguage")
-        UserDefaults.standard.set(uiLanguage, forKey: "selectedLanguage")
-        audioTranscriber.setSelectedDevice(index: selectedDeviceIndex)
-        audioTranscriber.setLanguage(selectedLanguage)
-    }
-}
-
-// MARK: - Settings Card
-
-struct SettingsCard<Content: View>: View {
-    let icon: String
-    let iconColor: Color
-    let titleKey: LocalizedStringKey
-    let subtitleKey: LocalizedStringKey?
-    let content: Content
-
-    init(
-        icon: String,
-        iconColor: Color,
-        title: LocalizedStringKey,
-        subtitle: LocalizedStringKey?,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.icon = icon
-        self.iconColor = iconColor
-        self.titleKey = title
-        self.subtitleKey = subtitle
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                    .foregroundColor(iconColor)
-                    .frame(width: 26, height: 26)
-                    .background(iconColor.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(titleKey)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
-                    if let subtitleKey = subtitleKey {
-                        Text(subtitleKey)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                Spacer()
-            }
-            content
-        }
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Model Option Row
-
-struct ModelOptionRow: View {
-    let name: String
-    let size: String
-    let description: String
-    let isSelected: Bool
-    let isDownloaded: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                RadioButton(isSelected: isSelected)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text(name)
-                            .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                            .foregroundColor(.primary)
-                        Badge(size, color: .secondary)
-                        if isDownloaded {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(.green)
-                        }
-                    }
-                    Text(description)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
-            .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.2) : Color.clear, lineWidth: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - Device Option Row
-
-struct DeviceOptionRow: View {
-    let name: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .accentColor : .secondary)
-                Text(name)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary)
-                Spacer()
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
-            .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - Language Option Row
-
-struct LanguageOptionRow: View {
-    let name: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Text(name)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary)
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.accentColor)
-                }
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
-            .background(isSelected ? Color.accentColor.opacity(0.08) : Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - Accessibility Permission Card
-
-struct AccessibilityPermissionCard: View {
-    let onOpenSettings: () -> Void
-    let onCheckAgain: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13))
-                    .foregroundColor(.orange)
-                    .frame(width: 26, height: 26)
-                    .background(Color.orange.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(LocalizedStringKey("settings.view.accessibility.permission.label"))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
-                    Text(LocalizedStringKey("settings.view.accessibility.permission.subtitle"))
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-            }
-
-            Text(LocalizedStringKey("settings.view.accessibility.permission.description"))
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .lineLimit(3)
-
-            Text("1. Ensure app is in Applications folder\n2. Click button below to open System Settings\n3. Find Typeless in the list and enable it")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .lineLimit(4)
-
-            HStack(spacing: 12) {
-                Button(action: onOpenSettings) {
-                    Label(LocalizedStringKey("settings.view.accessibility.permission.open.settings"), systemImage: "gear")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .buttonStyle(SettingsPrimaryButtonStyle())
-
-                Button(action: onCheckAgain) {
-                    Label(LocalizedStringKey("settings.view.accessibility.permission.check.again"), systemImage: "arrow.clockwise")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(SettingsSecondaryButtonStyle())
-            }
-        }
-        .padding(12)
-        .background(Color.orange.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-        )
+        shortcutEnabled = true
+        shortcutString = "cmd+shift+d"
+        UserDefaults.standard.set("medium", forKey: "SelectedModel")
+        UserDefaults.standard.set(0, forKey: "SelectedDeviceIndex")
+        UserDefaults.standard.set("zh", forKey: "SelectedLanguage")
+        applyModel("medium")
+        applyLanguage("zh")
+        applyDevice(0)
     }
 }
 
 #Preview {
     SettingsView(isPresented: .constant(true))
-        .environmentObject(AudioTranscriber())
+        .environmentObject(AudioTranscriber.shared)
 }

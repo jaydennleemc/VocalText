@@ -9,103 +9,139 @@ final class TranscriptionService: ObservableObject {
     @Published var transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
     @Published var hasValidTranscript = false
 
-    private var selectedLanguage: String = "zh"
-
-    // MARK: - Language
+    private var selectedLanguage = "zh"
+    private var activeTask: Task<String, Error>?
 
     func setLanguage(_ language: String) {
         selectedLanguage = language
     }
 
-    var currentLanguage: String { selectedLanguage }
+    func cancel() {
+        activeTask?.cancel()
+        activeTask = nil
+        isTranscribing = false
+    }
 
-    // MARK: - Transcription
-
-    func transcribe(audioFilePath: String, using whisperKit: WhisperKit?) async {
-        guard let whisperKit = whisperKit else {
-            transcript = NSLocalizedString("model.status.load.failed", comment: "Model failed to load")
-            hasValidTranscript = false
-            NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.modelLoadFailed(reason: "WhisperKit not initialized"))
-            return
+    func transcribe(audioFilePath: String, using whisperKit: WhisperKit?) async -> String {
+        if let activeTask {
+            activeTask.cancel()
+            _ = try? await activeTask.value
+            self.activeTask = nil
         }
 
-        // Validate file
+        guard let whisperKit else {
+            transcript = NSLocalizedString("model.status.load.failed", comment: "")
+            hasValidTranscript = false
+            return ""
+        }
+
         guard FileManager.default.fileExists(atPath: audioFilePath) else {
-            transcript = NSLocalizedString("error.file.notFound", comment: "Audio file not found")
             hasValidTranscript = false
-            NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.fileNotFound(path: audioFilePath))
-            return
-        }
-
-        do {
-            let fileAttributes = try FileManager.default.attributesOfItem(atPath: audioFilePath)
-            if let fileSize = fileAttributes[.size] as? NSNumber, fileSize.intValue == 0 {
-                transcript = NSLocalizedString("error.file.empty", comment: "Audio file is empty")
-                hasValidTranscript = false
-                NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.fileEmpty(path: audioFilePath))
-                return
-            }
-        } catch {
-            #if DEBUG
-            print("❌ Failed to get file info: \(error)")
-            #endif
+            return ""
         }
 
         isTranscribing = true
-        NotificationCenter.default.post(name: .transcribingStarted, object: nil)
-
-        do {
-            let decodingOptions = DecodingOptions(
-                language: selectedLanguage,
-                temperature: 0.0,
-                sampleLength: 224
-            )
-
-            let result = try await whisperKit.transcribe(
-                audioPath: audioFilePath,
-                decodeOptions: decodingOptions
-            )
-
-            let extractedText = Self.extractTranscriptText(from: result)
-            transcript = extractedText
-            hasValidTranscript = !extractedText.isEmpty
-        } catch {
-            transcript = String(format: NSLocalizedString("error.transcription.failed", comment: "Transcription failed"), error.localizedDescription)
-            hasValidTranscript = false
-            NotificationCenter.default.post(name: .transcriptionError, object: TypelessError.transcriptionFailed(reason: error.localizedDescription))
-        }
-
-        isTranscribing = false
-        NotificationCenter.default.post(name: .transcribingStopped, object: nil)
-    }
-
-    func resetTranscript() {
-        transcript = NSLocalizedString("recording.state.ready", comment: "Ready to record")
         hasValidTranscript = false
-    }
 
-    private static func extractTranscriptText(from result: Any) -> String {
-        // Primary expected type from WhisperKit
-        if let results = result as? [TranscriptionResult] {
-            return results.first?.text ?? ""
+        let language = Self.normalizeLanguageCode(selectedLanguage)
+
+        // Pass 1: user language, no VAD (short dictation — VAD was wiping short clips).
+        var text = await runTranscribe(
+            whisperKit: whisperKit,
+            path: audioFilePath,
+            language: language,
+            detectLanguage: false
+        )
+
+        // Pass 2: if empty, auto-detect language (wrong zh/yue often yields blank).
+        if text.isEmpty {
+            #if DEBUG
+            print("⚠️ Empty with language=\(language), retry detectLanguage")
+            #endif
+            text = await runTranscribe(
+                whisperKit: whisperKit,
+                path: audioFilePath,
+                language: nil,
+                detectLanguage: true
+            )
         }
 
-        // Fallback for string array results
-        if let textResults = result as? [String] {
-            return textResults.first ?? ""
-        }
-
-        // Single string result
-        if let singleText = result as? String {
-            return singleText
-        }
+        text = Self.cleanupTranscript(text)
+        transcript = text.isEmpty
+            ? NSLocalizedString("error.transcription.emptyResult", comment: "")
+            : text
+        hasValidTranscript = !text.isEmpty
+        isTranscribing = false
 
         #if DEBUG
-        print("⚠️ Unexpected WhisperKit result type: \(type(of: result))")
+        print("✅ Transcript (\(text.count) chars): \(text.prefix(120))")
         #endif
-        return ""
+        return text
+    }
+
+    private func runTranscribe(
+        whisperKit: WhisperKit,
+        path: String,
+        language: String?,
+        detectLanguage: Bool
+    ) async -> String {
+        let task = Task<String, Error> {
+            let options = DecodingOptions(
+                verbose: false,
+                task: .transcribe,
+                language: language,
+                temperature: 0.0,
+                temperatureIncrementOnFallback: 0.2,
+                temperatureFallbackCount: 5,
+                sampleLength: 224,
+                topK: 5,
+                usePrefillPrompt: language != nil,
+                usePrefillCache: true,
+                detectLanguage: detectLanguage,
+                skipSpecialTokens: true,
+                withoutTimestamps: true,
+                wordTimestamps: false,
+                suppressBlank: true,
+                // More permissive — short BT clips were rejected as "no speech".
+                compressionRatioThreshold: 2.4,
+                logProbThreshold: -1.2,
+                firstTokenLogProbThreshold: -1.8,
+                noSpeechThreshold: 0.35,
+                chunkingStrategy: .none
+            )
+            let result = try await whisperKit.transcribe(audioPath: path, decodeOptions: options)
+            return result.map(\.text).joined(separator: " ")
+        }
+        activeTask = task
+        do {
+            return try await task.value
+        } catch {
+            #if DEBUG
+            print("❌ transcribe pass error: \(error)")
+            #endif
+            return ""
+        }
+    }
+
+    private static func normalizeLanguageCode(_ code: String) -> String {
+        switch code.lowercased() {
+        case "yue", "zh-yue", "cantonese": return "yue"
+        case "zh-hans", "zh-hant", "zh-cn", "zh-tw", "chinese": return "zh"
+        default: return code.lowercased()
+        }
+    }
+
+    private static func cleanupTranscript(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        for j in ["<|startoftranscript|>", "<|endoftext|>", "<|notimestamps|>", "[BLANK_AUDIO]", "(blank)"] {
+            text = text.replacingOccurrences(of: j, with: "", options: .caseInsensitive)
+        }
+        while text.contains("  ") { text = text.replacingOccurrences(of: "  ", with: " ") }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let letters = text.unicodeScalars.filter {
+            CharacterSet.alphanumerics.contains($0) || (0x4E00...0x9FFF).contains($0.value)
+        }
+        if letters.isEmpty { return "" }
+        return text
     }
 }
-
-// MARK: - Notification Names
-// Notification.Name extensions are defined in Extensions/Notifications.swift

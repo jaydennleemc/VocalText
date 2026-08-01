@@ -11,8 +11,11 @@ import SwiftUI
 struct TypelessApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     var body: some Scene {
-        // 移除 WindowGroup 以创建无窗口应用
+        // LSUIElement menu-bar app: no WindowGroup.
+        // Settings / History are opened via AppWindows (NSWindow), not the Settings scene
+        // — showSettingsWindow: is a no-op for many agent apps.
         Settings {
+            // Keeps ⌘, wired by AppKit when available; content is unused — AppWindows hosts the real UI.
             EmptyView()
         }
     }
@@ -23,26 +26,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         registerDefaults()
-        copyPreDownloadedModelsIfNeeded()
+        // Menu bar first — don't block UI on model copy / download.
         menuBarController = MenuBarController()
+        // Bundled model copy (if any) off the main thread.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.copyPreDownloadedModelsIfNeeded()
+        }
     }
     
     private func registerDefaults() {
         let defaultValues: [String: Any] = [
             "QuickRecordShortcutEnabled": true,
-            "QuickRecordShortcutKey": "cmd+shift+v"
+            "QuickRecordShortcutKey": "cmd+shift+d"
         ]
         UserDefaults.standard.register(defaults: defaultValues)
         
         #if DEBUG
         print("📝 UserDefaults defaults registered: enabled=\(UserDefaults.standard.bool(forKey: "QuickRecordShortcutEnabled")), key=\(UserDefaults.standard.string(forKey: "QuickRecordShortcutKey") ?? "nil")")
         #endif
-    }
-
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // 这里可以添加退出前的检查逻辑
-        // 目前我们允许应用正常退出，但可以在关键操作期间提示用户
-        return .terminateNow
     }
 
     private func copyPreDownloadedModelsIfNeeded() {

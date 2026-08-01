@@ -2,77 +2,44 @@
 //  StateViews.swift
 //  Typeless
 //
-//  Created by LEEJAYMC on 16/9/2025.
-//
 
 import SwiftUI
 
-// MARK: - Status Card
+// MARK: - Generic placeholder
 
-struct StatusCard: View {
-    let icon: String
+struct StatusPlaceholder: View {
+    let symbol: String
     let title: String
     let subtitle: String?
-    let color: Color
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundColor(color)
-                .frame(width: 36, height: 36)
-                .background(color.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+        VStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.system(size: 36, weight: .medium))
+                .foregroundStyle(.secondary)
+                .symbolRenderingMode(.hierarchical)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(spacing: 4) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
 
-                if let subtitle = subtitle {
+                if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 280)
                 }
             }
-
-            Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
     }
 }
 
-// MARK: - Keyboard Shortcut Hint
-
-struct KeyboardShortcutHint: View {
-    let shortcut: String
-    let descriptionKey: LocalizedStringKey
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(shortcut)
-                .font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-
-            Text(descriptionKey)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-        }
-    }
-}
-
-// MARK: - Loading State View
+// MARK: - Loading
 
 struct LoadingStateView: View {
     let titleKey: LocalizedStringKey
@@ -81,19 +48,15 @@ struct LoadingStateView: View {
     var body: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .progressViewStyle(CircularProgressViewStyle())
-                .scaleEffect(1.2)
-                .tint(.accentColor)
+                .controlSize(.regular)
 
             VStack(spacing: 4) {
                 Text(titleKey)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
-
-                if let subtitleKey = subtitleKey {
+                if let subtitleKey {
                     Text(subtitleKey)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -101,107 +64,97 @@ struct LoadingStateView: View {
     }
 }
 
-// MARK: - Download Progress View
+// MARK: - Download
 
 struct DownloadProgressView: View {
     let status: String
     let progress: Double
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 18) {
             Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 56, weight: .medium))
-                .foregroundColor(.accentColor)
+                .font(.system(size: 40, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .symbolRenderingMode(.hierarchical)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 Text(status)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 13, weight: .medium))
                     .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
 
                 ProgressView(value: progress)
-                    .progressViewStyle(LinearProgressViewStyle())
+                    .progressViewStyle(.linear)
                     .tint(.accentColor)
-                    .frame(width: 200)
+                    .frame(width: 220)
 
                 Text("\(Int(progress * 100))%")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
     }
 }
 
-// MARK: - Processing State View
+// MARK: - Processing
 
 struct ProcessingStateView: View {
-    @State private var rotation: Double = 0
-
     var body: some View {
         VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .stroke(Color(nsColor: .controlBackgroundColor), lineWidth: 3)
-                    .frame(width: 48, height: 48)
+            ProgressView()
+                .controlSize(.large)
+                .tint(.accentColor)
 
-                Circle()
-                    .trim(from: 0, to: 0.3)
-                    .stroke(LinearGradient(colors: [.accentColor, .purple], startPoint: .leading, endPoint: .trailing), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .frame(width: 48, height: 48)
-                    .rotationEffect(.degrees(rotation))
-                    .onAppear {
-                        withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
-                            rotation = 360
-                        }
-                    }
-            }
-
-            Text("Processing transcription...")
+            Text("Processing transcription…")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-// MARK: - Recording State View
+// MARK: - Recording
 
 struct RecordingStateView: View {
     let volumeLevel: Double
     let recordingTime: TimeInterval
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 18) {
             VoiceMemoWaveformView(volumeLevel: volumeLevel)
-                .frame(height: 80)
+                .frame(height: 72)
+                .padding(.horizontal, 20)
 
             HStack(spacing: 8) {
                 Circle()
-                    .fill(Color.red)
+                    .fill(.red)
                     .frame(width: 8, height: 8)
 
                 Text(formatTime(recordingTime))
-                    .font(.system(size: 28, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 28, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
             }
 
-            Text("Click to stop recording")
-                .font(.system(size: 13))
-                .foregroundColor(.secondary)
+            Text("Click the button to stop")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func formatTime(_ timeInterval: TimeInterval) -> String {
-        let minutes = Int(timeInterval) / 60
-        let seconds = Int(timeInterval) % 60
-        let centiseconds = Int((timeInterval.truncatingRemainder(dividingBy: 1)) * 100)
-        return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
+    private func formatTime(_ t: TimeInterval) -> String {
+        let m = Int(t) / 60
+        let s = Int(t) % 60
+        let cs = Int((t.truncatingRemainder(dividingBy: 1)) * 100)
+        return String(format: "%02d:%02d.%02d", m, s, cs)
     }
 }
 
-// MARK: - Permission Required View
+// MARK: - Permission
 
 struct PermissionRequiredView: View {
     let onRequestPermission: () -> Void
@@ -209,53 +162,41 @@ struct PermissionRequiredView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "mic.slash.circle.fill")
-                .font(.system(size: 56, weight: .medium))
-                .foregroundColor(.orange)
+                .font(.system(size: 44, weight: .medium))
+                .foregroundStyle(.orange)
+                .symbolRenderingMode(.hierarchical)
 
-            VStack(spacing: 8) {
-                Text("Microphone Permission Needed")
+            VStack(spacing: 6) {
+                Text("Microphone access needed")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-
-                Text("Please grant microphone access in System Settings to use voice transcription.")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                Text("Grant microphone access in System Settings to transcribe speech on-device.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
             }
 
             Button(action: onRequestPermission) {
                 Label("Enable Microphone", systemImage: "mic.fill")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 13, weight: .semibold))
             }
             .buttonStyle(.borderedProminent)
-            .padding(.top, 8)
+            .controlSize(.regular)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
     }
 }
 
-// MARK: - No Audio Device View
+// MARK: - No device
 
 struct NoAudioDeviceView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "speaker.slash.circle.fill")
-                .font(.system(size: 56, weight: .medium))
-                .foregroundColor(.secondary)
-
-            VStack(spacing: 8) {
-                Text("No Audio Input Device Detected")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-
-                Text("Please connect a microphone or check your audio settings.")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 280)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        StatusPlaceholder(
+            symbol: "speaker.slash.circle.fill",
+            title: "No audio input",
+            subtitle: "Connect a microphone or check Sound settings."
+        )
     }
 }

@@ -76,6 +76,7 @@
 
 /* Settings */
 "settings.view.title" = "設置";
+"settings.howto.title" = "如何聽寫";
 "settings.view.model.selection.label" = "模型選擇";
 "settings.view.model.downloaded.status" = "(已下載)";
 "settings.view.model.download.required.status" = "(需要下載)";
@@ -101,6 +102,7 @@
 
 /* Language Names for Transcription */
 "language.zh" = "中文";
+"language.yue" = "廣東話";
 "language.en" = "English";
 "language.ja" = "日本語";
 "language.ko" = "한국어";
@@ -140,19 +142,22 @@
 "settings.reset.confirmation.reset" = "重置";
 
 /* Quick Record Shortcut */
-"settings.view.quick.record.shortcut.label" = "快速錄音快捷鍵";
-"settings.view.quick.record.shortcut.subtitle" = "按下快捷鍵開始錄音";
-"settings.view.quick.record.shortcut.enable" = "啟用快速錄音";
+"settings.view.quick.record.shortcut.label" = "聽寫快捷鍵";
+"settings.view.quick.record.shortcut.subtitle" = "在任意 App 按住說話，鬆手後插入文字";
+"settings.view.quick.record.shortcut.enable" = "啟用聽寫快捷鍵";
 "settings.view.quick.record.shortcut.record" = "錄製快捷鍵";
 "settings.view.quick.record.shortcut.recording" = "請按下快捷鍵...";
 "settings.view.quick.record.shortcut.modifier" = "輔助鍵";
 "settings.view.quick.record.shortcut.key" = "按鍵";
 "settings.view.quick.record.shortcut.current" = "目前:";
 
+/* Quick-dictate overlay */
+"overlay.transcribing" = "轉寫中…";
+
 /* Accessibility Permission */
 "settings.view.accessibility.permission.label" = "需要輔助功能權限";
-"settings.view.accessibility.permission.subtitle" = "用於全域鍵盤快捷鍵";
-"settings.view.accessibility.permission.description" = "快速錄音快捷鍵需要輔助功能權限才能偵測全域鍵盤事件。請在系統設置中授予權限以啟用此功能。";
+"settings.view.accessibility.permission.subtitle" = "用於全域快捷鍵與貼上";
+"settings.view.accessibility.permission.description" = "聽寫需要輔助功能權限，以便識別全域快捷鍵，並把文字貼上到其他 App。請在系統設置中授權。";
 "settings.view.accessibility.permission.open.settings" = "打開設置";
 "settings.view.accessibility.permission.check.again" = "重新檢查";
 

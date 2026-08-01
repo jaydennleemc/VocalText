@@ -10,23 +10,63 @@ final class PermissionManager: ObservableObject {
     @Published var isCheckingPermission = true
     @Published var hasRequestedPermission = false
 
-    // MARK: - Microphone Permission
+    init() {
+        // Synchronous snapshot so we don't block recording waiting on async prompt state.
+        refreshStatus()
+    }
+
+    func refreshStatus() {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        hasMicrophonePermission = (status == .authorized)
+        isCheckingPermission = (status == .notDetermined)
+    }
 
     func checkMicrophonePermission() {
-        requestPermission(showAlertOnDeny: false)
+        refreshStatus()
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+            requestPermission(showAlertOnDeny: false)
+        }
     }
 
     func requestMicrophonePermission() {
         requestPermission(showAlertOnDeny: true)
     }
 
-    private func requestPermission(showAlertOnDeny: Bool) {
-        if !hasRequestedPermission {
-            isCheckingPermission = true
+    /// Awaitable grant for dictate start path.
+    func ensurePermission() async -> Bool {
+        refreshStatus()
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        switch status {
+        case .authorized:
+            hasMicrophonePermission = true
+            isCheckingPermission = false
+            return true
+        case .denied, .restricted:
+            hasMicrophonePermission = false
+            isCheckingPermission = false
+            showMicrophoneSettingsAlert()
+            return false
+        case .notDetermined:
             hasRequestedPermission = true
+            isCheckingPermission = true
+            let granted = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+                AVCaptureDevice.requestAccess(for: .audio) { ok in
+                    cont.resume(returning: ok)
+                }
+            }
+            hasMicrophonePermission = granted
+            isCheckingPermission = false
+            if !granted { showMicrophoneSettingsAlert() }
+            return granted
+        @unknown default:
+            return false
         }
+    }
 
-        AVAudioApplication.requestRecordPermission { [weak self] granted in
+    private func requestPermission(showAlertOnDeny: Bool) {
+        hasRequestedPermission = true
+        isCheckingPermission = true
+        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
             Task { @MainActor in
                 guard let self else { return }
                 self.hasMicrophonePermission = granted
@@ -44,9 +84,10 @@ final class PermissionManager: ObservableObject {
         alert.informativeText = NSLocalizedString("main.view.microphone.permission.needed.alert.message", comment: "")
         alert.addButton(withTitle: NSLocalizedString("main.view.open.settings.button", comment: ""))
         alert.addButton(withTitle: NSLocalizedString("general.cancel.button", comment: ""))
-
         if alert.runModal() == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 }

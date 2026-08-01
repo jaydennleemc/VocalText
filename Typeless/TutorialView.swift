@@ -153,7 +153,7 @@ struct TutorialView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
         }
-        .frame(width: 400, height: 380)
+        .frame(width: 420, height: 400)
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
